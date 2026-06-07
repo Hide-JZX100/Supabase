@@ -1,3 +1,31 @@
+/**
+ * @file 11_Config.設定管理.gs
+ * @description DistributeInventory プロジェクトの定数・設定管理モジュール。
+ * Supabase から在庫データを取得しスプレッドシートに配布するための
+ * 設定値・定数・ユーティリティ関数を定義します。
+ *
+ * ### 依存関係
+ * #### 参照元（このファイルを呼び出すファイル）
+ * - 12_Logger.gs: LOG_LEVEL, RETRY_CONFIG 定数
+ * - 13_SupabaseClient.gs: RETRY_CONFIG 定数
+ * - 15_SheetRepository.gs: DISTRIBUTE_COLUMNS, INVENTORY_SHEET_HEADERS 定数
+ * - 10_Main.gs: getSheetConfigs()
+ *
+ * ### スクリプトプロパティ一覧
+ * | キー                      | 説明                                              |
+ * |---------------------------|---------------------------------------------------|
+ * | SUPABASE_URL              | Supabase プロジェクト URL                         |
+ * | SUPABASE_KEY              | Supabase anon key (publishable key)               |
+ * | SUPABASE_LAST_EXECUTED_AT | 最終実行日時（ISO 8601形式、自動保存）            |
+ * | LOG_LEVEL                 | ログレベル (1:MINIMAL / 2:SUMMARY / 3:DETAILED)  |
+ * | TRIGGER_FUNCTION_NAME     | トリガーに設定するメイン関数名                    |
+ * | TRIGGER_MODE              | トリガーモード (TODAY / TOMORROW)                 |
+ * | SHEET_CONFIG_1            | {"id":"SSID","sheet":"シート名"} 形式のJSON       |
+ * | SHEET_CONFIG_2            | （同上、複数設定可能）                            |
+ *
+ * @version 1.0
+ */
+
 // ============================================================================
 // ログレベル設定
 // ============================================================================
