@@ -99,3 +99,67 @@ function logError(message, ...args) {
     console.error(message);
   }
 }
+
+// ============================================================================
+// エラーログのスプレッドシート書き込み
+// ============================================================================
+
+/**
+ * エラーログを指定スプレッドシートの「エラーログ」シートに記録する
+ *
+ * 書き込み先スプレッドシートごとにエラーを記録します。
+ * 「エラーログ」シートが存在しない場合は自動生成してヘッダー行を設定します。
+ * 既存のシートがある場合は末尾に追記します。
+ *
+ * 【処理フロー】
+ * 1. spreadsheetId から Spreadsheet を取得
+ * 2. 「エラーログ」シートを getSheetByName で取得
+ * 3. シートが存在しない場合は insertSheet で作成しヘッダー行を書き込む
+ * 4. エラー情報を行データに変換して末尾に追記する
+ *
+ * @param {string} spreadsheetId  - 書き込み先スプレッドシートID
+ * @param {Array}  errorDetails   - エラー情報の配列
+ *   各要素: { timestamp: Date, context: string, errorMessage: string }
+ * @return {void}
+ */
+function logErrorsToSheet(spreadsheetId, errorDetails) {
+  if (!errorDetails || errorDetails.length === 0) return;
+
+  try {
+    const spreadsheet = SpreadsheetApp.openById(spreadsheetId);
+    let errorSheet = spreadsheet.getSheetByName('エラーログ');
+
+    // エラーログシートが存在しない場合は自動生成してヘッダー行を設定
+    if (!errorSheet) {
+      errorSheet = spreadsheet.insertSheet('エラーログ');
+      const headers = ['発生日時', '処理コンテキスト', 'エラー内容', '記録日時'];
+      errorSheet.getRange(1, 1, 1, headers.length).setValues([headers]);
+      errorSheet.getRange(1, 1, 1, headers.length).setFontWeight('bold');
+      errorSheet.getRange(1, 1, 1, headers.length).setBackground('#f3f3f3');
+      logWithLevel(LOG_LEVEL.SUMMARY, '「エラーログ」シートを自動生成しました（スプレッドシートID: ' + spreadsheetId + '）');
+    }
+
+    const errorRows = errorDetails.map(error => [
+      error.timestamp || new Date(),
+      error.context || '',
+      error.errorMessage || '',
+      new Date()
+    ]);
+
+    const lastRow = errorSheet.getLastRow();
+    const range = errorSheet.getRange(lastRow + 1, 1, errorRows.length, 4);
+    range.setValues(errorRows);
+
+    // 日時列のフォーマットを設定
+    errorSheet.getRange(lastRow + 1, 1, errorRows.length, 1)
+      .setNumberFormat('yyyy/mm/dd hh:mm:ss');
+    errorSheet.getRange(lastRow + 1, 4, errorRows.length, 1)
+      .setNumberFormat('yyyy/mm/dd hh:mm:ss');
+
+    logWithLevel(LOG_LEVEL.SUMMARY, 'エラーログに ' + errorRows.length + ' 件を記録しました');
+
+  } catch (error) {
+    // エラーログ書き込み自体のエラーはコンソールのみ出力（無限ループ防止）
+    console.error('エラーログ書き込み中にエラーが発生しました（スプレッドシートID: ' + spreadsheetId + '）:', error.message);
+  }
+}
