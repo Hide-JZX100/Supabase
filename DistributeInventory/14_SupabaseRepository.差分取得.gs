@@ -1,3 +1,14 @@
+/**
+ * @file 14_SupabaseRepository.差分取得.gs
+ * @description Supabase からのデータ取得および最終実行日時の管理を行うリポジトリモジュール。
+ *
+ * ### 依存関係
+ * - **参照元**: 10_Main.エントリーポイント.gs, 99_Tests.テスト.gs
+ * - **参照先**: 13_SupabaseClient.Supabase接続.gs, 12_Logger.ログ管理.gs, 11_Config.設定管理.gs
+ *
+ * @version 1.0 (新規作成)
+ */
+
 /** Supabase REST API の1回のクエリで取得するレコード数上限 */
 const SUPABASE_QUERY_LIMIT = 5000;
 
