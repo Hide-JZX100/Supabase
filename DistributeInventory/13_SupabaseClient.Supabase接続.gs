@@ -1,3 +1,24 @@
+/**
+ * @file 13_SupabaseClient.Supabase接続.gs
+ * @description Supabase REST API への接続・GET リクエスト汎用モジュール。
+ * DistributeInventory プロジェクトでは読み込み専用のため、
+ * GET リクエストのみを実装します（RPC 呼び出しは不要）。
+ *
+ * ### 依存関係
+ * #### 参照元（このファイルを呼び出すファイル）
+ * - 14_SupabaseRepository.gs: querySupabaseTable() を利用
+ * - 99_Tests.gs: getSupabaseConfig() の動作確認
+ *
+ * #### 参照先（このファイルが使う関数・定数）
+ * - 11_Config.gs: RETRY_CONFIG 定数
+ * - 12_Logger.gs: logWithLevel(), logError()
+ *
+ * ### 公開関数
+ * @see getSupabaseConfig  - Supabase 接続設定を取得
+ * @see querySupabaseTable - テーブルへの GET リクエスト汎用ラッパー
+ *
+ * @version 1.0
+ */
 
 /**
  * Supabase 接続設定をスクリプトプロパティから取得する
