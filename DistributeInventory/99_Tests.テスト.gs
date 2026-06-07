@@ -196,10 +196,119 @@ function testLogLevel() {
 }
 
 // ============================================================================
-// Phase 2 以降のテスト関数（実装後に追記予定）
+// Phase 2: 差分取得テスト
 // ============================================================================
-// testGetChangedInventory()  → Phase 2 実装後に追記
-// testLastExecutedAt()       → Phase 2 実装後に追記
+
+/**
+ * 【テスト4】差分データの取得テスト
+ *
+ * 直近2時間前を基準日時とし、Supabase の NE_InventoryData から
+ * 更新されたデータを取得するテストです。
+ *
+ * 【確認ポイント】
+ * - エラーなく実行できるか
+ * - 取得件数が表示されるか
+ * - 取得データが存在する場合、先頭データの各フィールドが正しく表示されるか
+ */
+function testGetChangedInventory() {
+  console.log('=== テスト4: 差分取得テスト ===\n');
+
+  try {
+    // 直近2時間前を基準とする
+    const twoHoursAgo = new Date(Date.now() - 2 * 60 * 60 * 1000);
+    console.log('基準日時: ' + twoHoursAgo.toISOString() + ' (2時間前)\n');
+
+    const data = getChangedInventorySince(twoHoursAgo);
+    console.log('✓ 差分データ取得成功！');
+    console.log('取得件数: ' + data.length + '件\n');
+
+    if (data.length > 0) {
+      console.log('【先頭データサンプル】');
+      const sample = data[0];
+      console.log('  商品コード : ' + sample['商品コード']);
+      console.log('  商品名     : ' + sample['商品名']);
+      console.log('  在庫数     : ' + sample['在庫数']);
+      console.log('  更新日時   : ' + sample['更新日時']);
+      console.log('  JANコード  : ' + sample['JANコード']);
+    } else {
+      console.log('※ 直近2時間以内に更新されたデータはありませんでした。');
+    }
+
+  } catch (error) {
+    console.error('❌ エラー: ' + error.message);
+  }
+
+  console.log('\n=== テスト4 完了 ===');
+}
+
+/**
+ * 【テスト5】最終実行日時の保存・読み込みテスト
+ *
+ * 最終実行日時 (SUPABASE_LAST_EXECUTED_AT) の保存と読み込みを往復で行い、
+ * 正常に動作するか確認します。
+ * 元の設定値を破壊しないように一時退避と復元を行います。
+ *
+ * 【確認ポイント】
+ * - 保存・読み込みがエラーなく実行できるか
+ * - 保存した値と読み込んだ値が一致するか
+ * - 未設定時のフォールバック値（2時間前など）が正しく計算されるか
+ */
+function testLastExecutedAt() {
+  console.log('=== テスト5: 最終実行日時 保存・読み込み確認 ===\n');
+
+  const properties = PropertiesService.getScriptProperties();
+  const originalValue = properties.getProperty('SUPABASE_LAST_EXECUTED_AT');
+
+  try {
+    // 1. 未設定状態（フォールバック）のテスト
+    console.log('1. 一時的にプロパティを削除してフォールバックを確認します...');
+    properties.deleteProperty('SUPABASE_LAST_EXECUTED_AT');
+    
+    const fallbackTime = loadLastExecutedAt(2); // 2時間前
+    const now = Date.now();
+    const expectedTime = now - 2 * 60 * 60 * 1000;
+    
+    // 誤差5秒以内であればOKとする
+    const diff = Math.abs(fallbackTime.getTime() - expectedTime);
+    if (diff < 5000) {
+      console.log('  ✓ フォールバック日時の計算は正常です（約2時間前: ' + fallbackTime.toISOString() + '）');
+    } else {
+      console.log('  ❌ フォールバック日時の計算にズレがあります: ' + fallbackTime.toISOString());
+    }
+
+    // 2. 保存と読み込みのテスト
+    console.log('\n2. 日時を保存して読み込みを確認します...');
+    const savedString = saveLastExecutedAt();
+    const loadedTime = loadLastExecutedAt();
+
+    if (loadedTime.toISOString() === savedString) {
+      console.log('  ✓ 保存された値 (' + savedString + ') と 読み込まれた値 (' + loadedTime.toISOString() + ') が一致しました！');
+    } else {
+      console.log('  ❌ 値が一致しません');
+      console.log('    保存: ' + savedString);
+      console.log('    読込: ' + loadedTime.toISOString());
+    }
+
+  } catch (error) {
+    console.error('❌ エラー: ' + error.message);
+  } finally {
+    // 元の値を復元
+    console.log('\n3. スクリプトプロパティの元の値を復元します...');
+    if (originalValue !== null) {
+      properties.setProperty('SUPABASE_LAST_EXECUTED_AT', originalValue);
+      console.log('  元の値を復元しました: ' + originalValue);
+    } else {
+      properties.deleteProperty('SUPABASE_LAST_EXECUTED_AT');
+      console.log('  元々未設定だったため、プロパティを削除しました。');
+    }
+  }
+
+  console.log('\n=== テスト5 完了 ===');
+}
+
+// ============================================================================
+// Phase 3 以降のテスト関数（実装後に追記予定）
+// ============================================================================
 // testBuildRowIndexMap()     → Phase 3 実装後に追記
 // testUpdateInventoryRows()  → Phase 3 実装後に追記
 // testInitializeSheet()      → Phase 3 実装後に追記
