@@ -56,3 +56,28 @@ function saveLastExecutedAt() {
   return isoString;
 }
 
+/**
+ * 最終実行日時をスクリプトプロパティから読み出す
+ *
+ * 【処理フロー】
+ * 1. スクリプトプロパティから 'SUPABASE_LAST_EXECUTED_AT' を取得する
+ * 2. 値が存在すれば、それを Date オブジェクトに変換してログ出力し、返却する
+ * 3. 値が存在しない場合、fallbackHours 時間前の日時を計算してログ出力し、返却する
+ *
+ * @param {number} [fallbackHours=2] - 未保存時のフォールバック時間数（デフォルト: 2）
+ * @return {Date} 最終実行日時
+ */
+function loadLastExecutedAt(fallbackHours = 2) {
+  const saved = PropertiesService.getScriptProperties()
+    .getProperty('SUPABASE_LAST_EXECUTED_AT');
+
+  if (saved) {
+    logWithLevel(LOG_LEVEL.MINIMAL, '最終実行日時を読み込み: ' + saved);
+    return new Date(saved);
+  }
+
+  // 未保存時はフォールバック
+  const fallback = new Date(Date.now() - fallbackHours * 60 * 60 * 1000);
+  logWithLevel(LOG_LEVEL.MINIMAL, '最終実行日時が未保存のため ' + fallbackHours + '時間前 を使用: ' + fallback.toISOString());
+  return fallback;
+}
