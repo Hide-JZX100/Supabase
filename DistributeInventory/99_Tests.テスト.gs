@@ -307,9 +307,193 @@ function testLastExecutedAt() {
 }
 
 // ============================================================================
-// Phase 3 以降のテスト関数（実装後に追記予定）
+// Phase 3: シート書き込みテスト
 // ============================================================================
-// testBuildRowIndexMap()     → Phase 3 実装後に追記
-// testUpdateInventoryRows()  → Phase 3 実装後に追記
-// testInitializeSheet()      → Phase 3 実装後に追記
+
+/**
+ * 【テスト6】商品コード→行番号 マップ生成テスト
+ *
+ * スクリプトプロパティで設定された1番目のスプレッドシートの対象シートを開き、
+ * 商品コードと行番号の対応マップが正しく生成されるか確認します。
+ *
+ * 【確認ポイント】
+ * - エラーなく実行できるか
+ * - 生成されたマップのサイズがログ出力されるか
+ * - マップの先頭いくつかのエントリーが表示されるか
+ */
+function testBuildRowIndexMap() {
+  console.log('=== テスト6: 商品コード→行番号 マップ生成確認 ===\n');
+
+  try {
+    const configs = getSheetConfigs();
+    const config = configs[0]; // 1番目の設定を使用
+    console.log('対象スプレッドシート: ' + config.id);
+    console.log('対象シート名        : ' + config.sheet);
+
+    const sheet = SpreadsheetApp.openById(config.id).getSheetByName(config.sheet);
+    if (!sheet) {
+      console.log('❌ シート「' + config.sheet + '」が見つかりません。先にテスト8を実行するか、シートを作成してください。');
+      return;
+    }
+
+    const map = buildRowIndexMap(sheet);
+    console.log('✓ マップ生成成功！');
+    console.log('登録件数: ' + map.size + ' 件\n');
+
+    if (map.size > 0) {
+      console.log('【マップのエントリーサンプル（最大5件）】');
+      let count = 0;
+      for (const [code, row] of map) {
+        console.log('  商品コード: ' + code + ' -> ' + row + ' 行目');
+        count++;
+        if (count >= 5) break;
+      }
+    } else {
+      console.log('※ シートにデータがありません（またはヘッダー行のみです）。');
+    }
+
+  } catch (error) {
+    console.error('❌ エラー: ' + error.message);
+  }
+
+  console.log('\n=== テスト6 完了 ===');
+}
+
+/**
+ * 【テスト7】差分上書き更新テスト
+ *
+ * スクリプトプロパティで設定された1番目のスプレッドシートの指定シートに対し、
+ * テスト用の擬似的な変更データを送信して、既存行の更新および
+ * 新規商品の追記が行われるか検証します。
+ *
+ * 【注意】
+ * このテストを実行すると、対象シートにテスト用データが書き込まれます。
+ * 必要に応じて、テスト用のスプレッドシートIDとシート名を一時的に
+ * スクリプトプロパティ（SHEET_CONFIG_1）に指定して実行してください。
+ *
+ * 【確認ポイント】
+ * - 更新処理がエラーなく終了するか
+ * - 既存商品（シートにあるもの）を渡した時に、正しく「更新」としてカウントされるか
+ * - 存在しない新規商品を渡した時に、正しく「追記」としてカウントされるか
+ */
+function testUpdateInventoryRows() {
+  console.log('=== テスト7: 差分上書き更新テスト ===\n');
+
+  try {
+    const configs = getSheetConfigs();
+    const config = configs[0];
+    const sheet = SpreadsheetApp.openById(config.id).getSheetByName(config.sheet);
+
+    if (!sheet) {
+      console.log('❌ シート「' + config.sheet + '」が見つかりません。先にテスト8を実行するか、シートを作成してください。');
+      return;
+    }
+
+    console.log('書き込み前シートの最終行: ' + sheet.getLastRow() + ' 行\n');
+
+    // テスト用のダミー差分データ（2件）を作成
+    // 1件目は既存の商品コード（もしシートにデータがあればそれを上書き）、2件目は新規追加用の商品コード
+    let existingGoodsCode = 'TEST-EXISTING-001';
+    
+    // シートにデータがあれば、実際の1件目の商品コードを取得して上書きテストに使用
+    const map = buildRowIndexMap(sheet);
+    if (map.size > 0) {
+      existingGoodsCode = map.keys().next().value;
+      console.log('既存商品のテストコード: ' + existingGoodsCode + ' (シートから取得)');
+    } else {
+      console.log('既存商品がないため、テストコード「' + existingGoodsCode + '」で新規作成します。');
+    }
+
+    const testChangedData = [
+      {
+        '商品コード': existingGoodsCode,
+        '商品名': 'テスト商品（既存更新テスト）',
+        '在庫数': 99,
+        'フリー在庫数': 90,
+        '引当数': 9,
+        '更新日時': new Date().toISOString()
+      },
+      {
+        '商品コード': 'TEST-NEW-' + Math.floor(Math.random() * 10000),
+        '商品名': 'テスト商品（新規追記テスト）',
+        '在庫数': 5,
+        'フリー在庫数': 5,
+        '更新日時': new Date().toISOString()
+      }
+    ];
+
+    console.log('テストデータ書き込み中...');
+    const result = updateInventoryRows(sheet, testChangedData);
+    console.log('\n✓ 書き込み結果:');
+    console.log('  更新件数: ' + result.updated + ' 件 (期待値: ' + (map.size > 0 ? 1 : 0) + ' 以上)');
+    console.log('  追記件数: ' + result.appended + ' 件 (期待値: ' + (map.size > 0 ? 1 : 2) + ' 以上)');
+
+    console.log('書き込み後シートの最終行: ' + sheet.getLastRow() + ' 行');
+
+  } catch (error) {
+    console.error('❌ エラー: ' + error.message);
+  }
+
+  console.log('\n=== テスト7 完了 ===');
+}
+
+/**
+ * 【テスト8】シート初期化テスト
+ *
+ * スクリプトプロパティで設定された1番目のスプレッドシートの指定シートに対し、
+ * 全件初期化（クリア＆ヘッダー作成＆データ書き込み）ができるか確認します。
+ *
+ * 【注意】
+ * このテストを実行すると、対象シートの既存データがクリアされます。
+ * 必ずテスト用のスプレッドシートまたは、空のシートを指定してテストしてください。
+ *
+ * 【確認ポイント】
+ * - 既存データがクリアされ、ヘッダー行が正しく生成されるか
+ * - テスト用のダミーデータ（3件）が一括書き込みされるか
+ * - 更新日時列（M列）のフォーマットが適用されているか
+ */
+function testInitializeSheet() {
+  console.log('=== テスト8: シート初期化テスト ===\n');
+
+  try {
+    const configs = getSheetConfigs();
+    const config = configs[0];
+    const spreadsheet = SpreadsheetApp.openById(config.id);
+    let sheet = spreadsheet.getSheetByName(config.sheet);
+
+    if (!sheet) {
+      console.log('シート「' + config.sheet + '」が存在しないため、新規作成します。');
+      sheet = spreadsheet.insertSheet(config.sheet);
+    }
+
+    // ダミーの全件データ（3件）
+    const dummyAllData = [
+      { '商品コード': 'TEST-A001', '商品名': 'テスト商品A', '在庫数': 100, '更新日時': new Date().toISOString() },
+      { '商品コード': 'TEST-B002', '商品名': 'テスト商品B', '在庫数': 200, '更新日時': new Date().toISOString() },
+      { '商品コード': 'TEST-C003', '商品名': 'テスト商品C', '在庫数': 0, '更新日時': new Date().toISOString() }
+    ];
+
+    console.log('初期化処理を実行します...');
+    initializeInventorySheet(sheet, dummyAllData);
+    
+    console.log('\n✓ 初期化完了後の検証:');
+    console.log('  現在の最終行: ' + sheet.getLastRow() + ' 行 (期待値: 4 行)');
+    
+    const writtenHeaders = sheet.getRange(1, 1, 1, TOTAL_COLUMNS).getValues()[0];
+    console.log('  ヘッダーチェック (A列): ' + (writtenHeaders[0] === '商品コード' ? '✓ OK' : '❌ NG ("' + writtenHeaders[0] + '")'));
+    console.log('  ヘッダーチェック (M列): ' + (writtenHeaders[TOTAL_COLUMNS - 1] === '更新日時' ? '✓ OK' : '❌ NG ("' + writtenHeaders[TOTAL_COLUMNS - 1] + '")'));
+
+    const sampleRow = sheet.getRange(2, 1, 1, 3).getValues()[0];
+    console.log('  データチェック (A2:C2): ' + sampleRow[0] + ' | ' + sampleRow[1] + ' | 在庫: ' + sampleRow[2]);
+
+  } catch (error) {
+    console.error('❌ エラー: ' + error.message);
+  }
+
+  console.log('\n=== テスト8 完了 ===');
+}
+
+// ============================================================================
+// Phase 4 以降のテスト関数（実装後に追記予定）
+// ============================================================================
 // testFullFlow()             → Phase 4 実装後に追記
