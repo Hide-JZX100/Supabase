@@ -27,3 +27,28 @@ const RETRY_CONFIG = {
   ENABLE_RETRY: true,     // リトライ機能の有効/無効
   LOG_RETRY_STATS: true   // リトライ統計のログ出力
 };
+
+// ============================================================================
+// スプレッドシート列定義（書き込み先の13列構成）
+// ============================================================================
+
+/**
+ * 書き込み列の定義（0始まりのインデックス）
+ * GetInventoryData の12列に加え、M列（更新日時）を追加した13列構成。
+ */
+const DISTRIBUTE_COLUMNS = {
+  GOODS_CODE: 0,  // A列: 商品コード
+  GOODS_NAME: 1,  // B列: 商品名
+  STOCK_QTY: 2,  // C列: 在庫数
+  ALLOCATED_QTY: 3,  // D列: 引当数
+  FREE_QTY: 4,  // E列: フリー在庫数
+  RESERVE_QTY: 5,  // F列: 予約在庫数
+  RESERVE_ALLOCATED: 6,  // G列: 予約引当数
+  RESERVE_FREE: 7,  // H列: 予約フリー在庫数
+  DEFECTIVE_QTY: 8,  // I列: 不良在庫数
+  ORDER_REMAINING: 9,  // J列: 発注残数
+  SHORTAGE_QTY: 10, // K列: 欠品数
+  JAN_CODE: 11, // L列: JANコード
+  UPDATED_AT: 12  // M列: 更新日時
+};
+
