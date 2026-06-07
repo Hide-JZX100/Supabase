@@ -103,3 +103,65 @@ function updateInventoryRows(sheet, changedData) {
   return { updated: updatedCount, appended: appendedCount };
 }
 
+/**
+ * スプレッドシートの指定シートを初期化し、全件データを書き込む（初期化専用）
+ *
+ * 【処理フロー】
+ * 1. シート内の既存データ（A〜M列）をクリアする。
+ * 2. 1行目にヘッダー行（13列）を設定し、太字かつ背景色（灰色）で装飾する。
+ * 3. 引数のデータが空の場合はここで処理を終了する。
+ * 4. 全件データ配列を 11_Config.gs の列定義（13列）に沿った2次元配列に整形する。
+ * 5. 2行目以降に一括で書き込む（setValues()）。
+ * 6. 更新日時列（M列）の数値フォーマットを 'yyyy/mm/dd hh:mm:ss' に設定。
+ *
+ * @param {GoogleAppsScript.Spreadsheet.Sheet} sheet - 対象シートオブジェクト
+ * @param {Array<Object>} allData - Supabaseから取得した全商品レコードの配列
+ * @return {void}
+ */
+function initializeInventorySheet(sheet, allData) {
+  logWithLevel(LOG_LEVEL.MINIMAL, 'シート「' + sheet.getName() + '」の初期化開始: ' + allData.length + ' 件');
+
+  const lastRow = sheet.getLastRow();
+  if (lastRow > 0) {
+    // A列からM列（TOTAL_COLUMNS = 13）のデータをクリア
+    sheet.getRange(1, 1, Math.max(lastRow, 1), TOTAL_COLUMNS).clear({ contentsOnly: true });
+  }
+
+  // 1行目にヘッダーを書き込み
+  sheet.getRange(1, 1, 1, TOTAL_COLUMNS).setValues([INVENTORY_SHEET_HEADERS]);
+  sheet.getRange(1, 1, 1, TOTAL_COLUMNS).setFontWeight('bold');
+  sheet.getRange(1, 1, 1, TOTAL_COLUMNS).setBackground('#f3f3f3');
+
+  if (!allData || allData.length === 0) {
+    logWithLevel(LOG_LEVEL.MINIMAL, '初期化データが0件のため、ヘッダーのみ作成しました。');
+    return;
+  }
+
+  // データを2次元配列に変換
+  const rows = allData.map(record => {
+    return [
+      record['商品コード'] ? record['商品コード'].toString() : '',
+      record['商品名'] || '',
+      record['在庫数'] || 0,
+      record['引当数'] || 0,
+      record['フリー在庫数'] || 0,
+      record['予約在庫数'] || 0,
+      record['予約引当数'] || 0,
+      record['予約フリー在庫数'] || 0,
+      record['不良在庫数'] || 0,
+      record['発注残数'] || 0,
+      record['欠品数'] || 0,
+      record['JANコード'] || null,
+      record['更新日時'] ? new Date(record['更新日時']) : new Date()
+    ];
+  });
+
+  // 2行目から一括書き込み
+  sheet.getRange(2, 1, rows.length, TOTAL_COLUMNS).setValues(rows);
+
+  // 更新日時列（M列）のフォーマットを設定
+  sheet.getRange(2, DISTRIBUTE_COLUMNS.UPDATED_AT + 1, rows.length, 1)
+    .setNumberFormat('yyyy/mm/dd hh:mm:ss');
+
+  logWithLevel(LOG_LEVEL.MINIMAL, 'シート「' + sheet.getName() + '」の初期化完了: ' + rows.length + ' 件書き込み');
+}
