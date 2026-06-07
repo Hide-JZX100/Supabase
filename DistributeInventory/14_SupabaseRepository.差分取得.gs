@@ -9,16 +9,22 @@
  * @version 1.0 (新規作成)
  */
 
-/** Supabase REST API の1回のクエリで取得するレコード数上限 */
-const SUPABASE_QUERY_LIMIT = 5000;
+/** Supabase REST API の1回のクエリで取得するレコード数上限（デフォルト上限の 1,000 件に設定） */
+const SUPABASE_QUERY_LIMIT = 1000;
 
 /**
- * 指定日時以降に更新された在庫データを取得する
+ * 指定日時以降に更新された在庫データを取得する（1,000件超のデータに対応するページネーション機能付き）
  *
  * 【処理フロー】
- * 1. 引数の日時を ISO 8601 文字列に変換する
- * 2. querySupabaseTable() で 更新日時 >= since の条件でフィルタリングして GET リクエストを送信する
- * 3. 取得データを配列で返す（0件の場合は空配列）
+ * 1. 引数の日時を ISO 8601 文字列に変換する。
+ * 2. 取得結果を蓄積する配列 `allData` と `offset`（取得開始位置）を初期化。
+ * 3. ループ内処理：
+ *    a. querySupabaseTable() で 更新日時 >= since, limit=1000, offset=[現在の位置] の条件でリクエスト。
+ *    b. 取得データがない、または成否フラグが false の場合はエラーをスロー。
+ *    c. 取得データを `allData` に追加。
+ *    d. 今回取得した件数が `SUPABASE_QUERY_LIMIT` (1,000) 未満の場合、すべてのデータが取得できたと判断してループを抜ける。
+ *    e. 取得件数が上限値と等しい場合、`offset` を 1,000 追加して次のページの読み込みへ進む。
+ * 4. 取得した全データを配列で返す（0件の場合は空配列）。
  *
  * @param {Date|string} since - 取得基準日時（この日時以降に更新された商品を取得）
  * @return {Array<Object>} 変化した商品データの配列
@@ -29,15 +35,39 @@ function getChangedInventorySince(since) {
 
   logWithLevel(LOG_LEVEL.MINIMAL, '差分取得開始: ' + sinceStr + ' 以降に更新された商品');
 
-  try {
-    const result = querySupabaseTable('NE_InventoryData', {
-      '更新日時': 'gte.' + sinceStr,
-      'order': '更新日時.desc',
-      'limit': SUPABASE_QUERY_LIMIT.toString()
-    });
+  const allData = [];
+  let offset = 0;
 
-    logWithLevel(LOG_LEVEL.MINIMAL, '差分取得完了: ' + result.data.length + '件');
-    return result.data;
+  try {
+    while (true) {
+      logWithLevel(LOG_LEVEL.SUMMARY, '  データ取得中... (オフセット: ' + offset + ', 上限: ' + SUPABASE_QUERY_LIMIT + ')');
+
+      const result = querySupabaseTable('NE_InventoryData', {
+        '更新日時': 'gte.' + sinceStr,
+        'order': '更新日時.desc',
+        'limit': SUPABASE_QUERY_LIMIT.toString(),
+        'offset': offset.toString()
+      });
+
+      if (!result.success || !result.data) {
+        throw new Error('Supabase からのデータ取得に失敗しました。');
+      }
+
+      const count = result.data.length;
+      allData.push(...result.data);
+
+      logWithLevel(LOG_LEVEL.SUMMARY, '    -> ' + count + ' 件取得 (累計: ' + allData.length + ' 件)');
+
+      // 取得した件数が 1,000 件未満であれば、これ以上のデータはないと判断して終了
+      if (count < SUPABASE_QUERY_LIMIT) {
+        break;
+      }
+
+      offset += SUPABASE_QUERY_LIMIT;
+    }
+
+    logWithLevel(LOG_LEVEL.MINIMAL, '差分取得完了: 総件数 ' + allData.length + ' 件');
+    return allData;
 
   } catch (error) {
     logError('差分取得エラー:', error.message);
