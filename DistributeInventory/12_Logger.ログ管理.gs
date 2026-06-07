@@ -1,3 +1,34 @@
+/**
+ * @file 12_Logger.ログ管理.gs
+ * @description DistributeInventory プロジェクトのログ管理・出力モジュール。
+ * システム全体のログ出力を一元管理します。
+ * すべてのログ出力はこのファイルの関数を経由することで、
+ * ログレベルによる出力制御を統一的に行います。
+ *
+ * ### 依存関係
+ * #### 参照元（このファイルを呼び出すファイル）
+ * - 10_Main.gs: メイン処理でのログ出力
+ * - 13_SupabaseClient.gs: 接続エラー時のログ出力
+ * - 14_SupabaseRepository.gs: 差分取得時のログ出力
+ * - 15_SheetRepository.gs: シート書き込み時のログ出力
+ *
+ * #### 参照先（このファイルが使う定数）
+ * - 11_Config.gs: LOG_LEVEL 定数
+ *
+ * ### ログレベル設定
+ * 1. LOG_LEVEL.MINIMAL  (1): 開始・終了・サマリーのみ（本番推奨）
+ * 2. LOG_LEVEL.SUMMARY  (2): バッチ集計＋詳細（デフォルト）
+ * 3. LOG_LEVEL.DETAILED (3): 全件出力（デバッグ用）
+ *
+ * @version 1.0
+ * @see getCurrentLogLevel
+ * @see setLogLevel
+ * @see showCurrentLogLevel
+ * @see logWithLevel
+ * @see logError
+ * @see logErrorsToSheet
+ */
+
 // ============================================================================
 // ログレベル管理
 // ============================================================================
