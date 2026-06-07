@@ -72,3 +72,5 @@ const INVENTORY_SHEET_HEADERS = [
   '更新日時'          // M列
 ];
 
+/** ヘッダー行の総列数 */
+const TOTAL_COLUMNS = INVENTORY_SHEET_HEADERS.length; // 13
