@@ -74,3 +74,62 @@ const INVENTORY_SHEET_HEADERS = [
 
 /** ヘッダー行の総列数 */
 const TOTAL_COLUMNS = INVENTORY_SHEET_HEADERS.length; // 13
+
+// ============================================================================
+// ユーティリティ関数
+// ============================================================================
+
+/**
+ * スクリプトプロパティから書き込み先スプレッドシート設定を全件取得する
+ *
+ * SHEET_CONFIG_1, SHEET_CONFIG_2, ... というキーを順番に探索し、
+ * JSON パースした設定オブジェクトの配列を返します。
+ * 連番が途切れた時点で探索を終了します（SHEET_CONFIG_1 がない場合は空配列）。
+ *
+ * 設定フォーマット例（スクリプトプロパティ）:
+ *   SHEET_CONFIG_1 : {"id":"スプレッドシートID","sheet":"在庫管理"}
+ *   SHEET_CONFIG_2 : {"id":"スプレッドシートID","sheet":"発注管理"}
+ *
+ * @return {Array<{id: string, sheet: string}>} 設定オブジェクトの配列
+ * @throws {Error} 設定が1件も見つからない場合
+ */
+function getSheetConfigs() {
+  const properties = PropertiesService.getScriptProperties();
+  const configs = [];
+  let index = 1;
+
+  while (true) {
+    const key = 'SHEET_CONFIG_' + index;
+    const value = properties.getProperty(key);
+
+    if (!value) break; // 連番が途切れたら終了
+
+    try {
+      const config = JSON.parse(value);
+
+      if (!config.id || !config.sheet) {
+        throw new Error('id または sheet が設定されていません: ' + value);
+      }
+
+      configs.push({
+        id: config.id,
+        sheet: config.sheet,
+        configKey: key
+      });
+
+    } catch (parseError) {
+      throw new Error('SHEET_CONFIG_' + index + ' のJSON解析に失敗しました: ' + parseError.message);
+    }
+
+    index++;
+  }
+
+  if (configs.length === 0) {
+    throw new Error(
+      'スクリプトプロパティに SHEET_CONFIG_1 が設定されていません。\n' +
+      '{"id":"スプレッドシートID","sheet":"シート名"} 形式で設定してください。'
+    );
+  }
+
+  return configs;
+}
