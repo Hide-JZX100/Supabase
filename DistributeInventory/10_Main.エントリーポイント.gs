@@ -1,4 +1,20 @@
 /**
+ * @file 10_Main.エントリーポイント.gs
+ * @description DistributeInventory プロジェクトのメインオーケストレーションモジュール。
+ * 定期実行トリガーから呼び出される差分更新の実行や、初期化処理の制御を行います。
+ *
+ * ### 依存関係
+ * - **参照元**: トリガー設定.gs (distributeInventoryChanges がトリガー設定される)
+ * - **参照先**:
+ *   - 11_Config.設定管理.gs (getSheetConfigs 等の取得)
+ *   - 12_Logger.ログ管理.gs (ログ出力、エラーログシート書き込み)
+ *   - 14_SupabaseRepository.差分取得.gs (差分データ取得、最終実行日時保存)
+ *   - 15_SheetRepository.シート書き込み.gs (スプレッドシート書き込み・初期化)
+ *
+ * @version 1.0 (新規作成)
+ */
+
+/**
  * 【定期トリガー実行用】Supabase から差分データを取得し、登録されたすべてのスプレッドシートに配布する
  *
  * 【処理フロー】
