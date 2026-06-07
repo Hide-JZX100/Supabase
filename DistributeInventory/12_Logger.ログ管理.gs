@@ -58,3 +58,44 @@ function showCurrentLogLevel() {
   console.log('setLogLevel(2) // SUMMARY に変更');
   console.log('setLogLevel(3) // DETAILED に変更');
 }
+
+// ============================================================================
+// ログ出力関数
+// ============================================================================
+
+/**
+ * レベル指定付きログ出力
+ *
+ * 現在のログレベルが requiredLevel 以上の場合のみ出力します。
+ *
+ * @param {number} requiredLevel - 出力に必要な最低ログレベル
+ * @param {string} message       - ログメッセージ
+ * @param {...*}   args          - 追加の引数（省略可）
+ */
+function logWithLevel(requiredLevel, message, ...args) {
+  const currentLevel = getCurrentLogLevel();
+
+  if (currentLevel >= requiredLevel) {
+    if (args.length > 0) {
+      console.log(message, ...args);
+    } else {
+      console.log(message);
+    }
+  }
+}
+
+/**
+ * エラーログ出力（標準）
+ *
+ * ログレベルに関わらず常に出力します。
+ *
+ * @param {string} message - エラーメッセージ
+ * @param {...*}   args    - 追加の引数（省略可）
+ */
+function logError(message, ...args) {
+  if (args.length > 0) {
+    console.error(message, ...args);
+  } else {
+    console.error(message);
+  }
+}
