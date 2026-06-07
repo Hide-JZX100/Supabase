@@ -494,6 +494,55 @@ function testInitializeSheet() {
 }
 
 // ============================================================================
-// Phase 4 以降のテスト関数（実装後に追記予定）
+// Phase 4: 全体フローテスト
 // ============================================================================
-// testFullFlow()             → Phase 4 実装後に追記
+
+/**
+ * 【テスト9】在庫配布処理 全体フローテスト
+ *
+ * 基準日時を直近2時間前に設定した上で、メイン関数 `distributeInventoryChanges()` を実行し、
+ * Supabaseからの差分取得からスプレッドシートへの書き込みまでの一連の流れが
+ * 正常に動作するか確認します。
+ * 元の設定値（SUPABASE_LAST_EXECUTED_AT）を破壊しないように一時退避と復元を行います。
+ *
+ * 【確認ポイント】
+ * - エラーなく実行が完了すること
+ * - ログに「在庫配布処理（差分更新）開始」および「完了」が出力されること
+ * - スプレッドシートが正しく更新されること（または0件で終了すること）
+ */
+function testFullFlow() {
+  console.log('=== テスト9: 在庫配布処理 全体フローテスト ===\n');
+
+  const properties = PropertiesService.getScriptProperties();
+  const originalValue = properties.getProperty('SUPABASE_LAST_EXECUTED_AT');
+
+  try {
+    // 直近2時間前を基準日時として一時設定する
+    const testSince = new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString();
+    properties.setProperty('SUPABASE_LAST_EXECUTED_AT', testSince);
+    console.log('テスト用基準日時を一時設定しました: ' + testSince);
+
+    console.log('\nメイン関数 distributeInventoryChanges() を実行します...');
+    distributeInventoryChanges();
+    console.log('✓ メイン関数実行完了');
+
+    // 実行後のプロパティ値を確認
+    const updatedValue = properties.getProperty('SUPABASE_LAST_EXECUTED_AT');
+    console.log('実行後の SUPABASE_LAST_EXECUTED_AT: ' + updatedValue);
+
+  } catch (error) {
+    console.error('❌ エラー: ' + error.message);
+  } finally {
+    // 元のプロパティ値を復元
+    console.log('\nスクリプトプロパティの元の値を復元します...');
+    if (originalValue !== null) {
+      properties.setProperty('SUPABASE_LAST_EXECUTED_AT', originalValue);
+      console.log('  元の値を復元しました: ' + originalValue);
+    } else {
+      properties.deleteProperty('SUPABASE_LAST_EXECUTED_AT');
+      console.log('  元々未設定だったため、プロパティを削除しました。');
+    }
+  }
+
+  console.log('\n=== テスト9 完了 ===');
+}
