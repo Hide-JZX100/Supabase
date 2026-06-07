@@ -1,3 +1,29 @@
+/**
+ * @file 99_Tests.テスト.gs
+ * @description DistributeInventory プロジェクトの動作確認・診断ツール。
+ * 各フェーズの実装完了時に対応するテスト関数を実行して動作を確認します。
+ *
+ * ### テスト関数一覧
+ * #### Phase 1: 基盤確認
+ * @see testSupabaseConnection - Supabase 接続確認（1件取得）
+ * @see testSheetConfigs       - スクリプトプロパティの設定値確認
+ * @see testLogLevel           - ログレベル設定確認
+ *
+ * #### Phase 2: 差分取得確認（Phase 2実装後に使用）
+ * @see testGetChangedInventory - 差分取得の動作確認
+ * @see testLastExecutedAt      - 最終実行日時の保存・読み込み確認
+ *
+ * #### Phase 3: シート書き込み確認（Phase 3実装後に使用）
+ * @see testBuildRowIndexMap    - 行番号マップ生成確認
+ * @see testUpdateInventoryRows - テスト用スプレッドシートへの書き込み確認
+ * @see testInitializeSheet     - 初期化関数の動作確認
+ *
+ * #### Phase 4: 全体フロー確認（Phase 4実装後に使用）
+ * @see testFullFlow            - distributeInventoryChanges() の全体動作確認
+ *
+ * @version 1.0 (Phase 1 テスト実装)
+ */
+
 // ============================================================================
 // Phase 1: 基盤確認テスト
 // ============================================================================
