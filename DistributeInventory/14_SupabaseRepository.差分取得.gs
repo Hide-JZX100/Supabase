@@ -34,3 +34,25 @@ function getChangedInventorySince(since) {
   }
 }
 
+/**
+ * 最終実行日時をスクリプトプロパティに保存する
+ *
+ * 保存キー: SUPABASE_LAST_EXECUTED_AT
+ * 保存形式: ISO 8601 文字列（UTC）
+ *
+ * 【処理フロー】
+ * 1. 現在日時（UTC）を取得して ISO 8601 文字列に変換する
+ * 2. スクリプトプロパティの 'SUPABASE_LAST_EXECUTED_AT' に保存する
+ * 3. 保存した日時文字列をログに出力し、返却する
+ *
+ * @return {string} 保存されたISO 8601文字列
+ */
+function saveLastExecutedAt() {
+  const now = new Date();
+  const isoString = now.toISOString();
+  PropertiesService.getScriptProperties()
+    .setProperty('SUPABASE_LAST_EXECUTED_AT', isoString);
+  logWithLevel(LOG_LEVEL.MINIMAL, '最終実行日時を保存: ' + isoString);
+  return isoString;
+}
+
