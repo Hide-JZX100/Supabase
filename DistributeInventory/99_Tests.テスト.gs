@@ -59,7 +59,6 @@ function testSupabaseConnection() {
   console.log('\n=== テスト1 完了 ===');
 }
 
-
 /**
  * 【テスト2】スクリプトプロパティの設定値確認
  *
@@ -141,3 +140,41 @@ function testSheetConfigs() {
   console.log('\n=== テスト2 完了 ===');
 }
 
+/**
+ * 【テスト3】ログレベル設定確認
+ *
+ * ログレベルの取得・変更が正しく動作するか確認します。
+ */
+function testLogLevel() {
+  console.log('=== テスト3: ログレベル設定確認 ===\n');
+
+  // 現在のログレベルを表示
+  showCurrentLogLevel();
+
+  console.log('\n--- 各ログレベルの出力確認 ---');
+
+  // 各レベルのログ出力テスト
+  console.log('\n■ MINIMAL レベルの出力（currentLevel >= 1 で表示）:');
+  logWithLevel(LOG_LEVEL.MINIMAL, '  → MINIMAL ログ（常に表示）');
+
+  console.log('\n■ SUMMARY レベルの出力（currentLevel >= 2 で表示）:');
+  logWithLevel(LOG_LEVEL.SUMMARY, '  → SUMMARY ログ（SUMMARY/DETAILED で表示）');
+
+  console.log('\n■ DETAILED レベルの出力（currentLevel >= 3 で表示）:');
+  logWithLevel(LOG_LEVEL.DETAILED, '  → DETAILED ログ（DETAILED のみで表示）');
+
+  console.log('\n■ エラーログ出力（常に表示）:');
+  logError('  → エラーログ（ログレベルに関わらず常に表示）');
+
+  console.log('\n=== テスト3 完了 ===');
+}
+
+// ============================================================================
+// Phase 2 以降のテスト関数（実装後に追記予定）
+// ============================================================================
+// testGetChangedInventory()  → Phase 2 実装後に追記
+// testLastExecutedAt()       → Phase 2 実装後に追記
+// testBuildRowIndexMap()     → Phase 3 実装後に追記
+// testUpdateInventoryRows()  → Phase 3 実装後に追記
+// testInitializeSheet()      → Phase 3 実装後に追記
+// testFullFlow()             → Phase 4 実装後に追記
