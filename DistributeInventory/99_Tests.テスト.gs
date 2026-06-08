@@ -582,3 +582,47 @@ function testFullFlow() {
 
   console.log('\n=== テスト9 完了 ===');
 }
+
+/**
+ * 【テスト10】エラーメール送信テスト
+ *
+ * スクリプトプロパティ `ERROR_NOTIFICATION_EMAIL` が正しく設定されていることを確認し、
+ * テスト用のエラーメールを送信します。
+ *
+ * 【確認ポイント】
+ * - エラーなく送信処理が完了すること
+ * - 実際に指定のアドレスにメールが届くこと
+ */
+function testSendErrorMail() {
+  console.log('=== テスト10: エラーメール送信テスト ===\n');
+
+  try {
+    const properties = PropertiesService.getScriptProperties();
+    const email = properties.getProperty('ERROR_NOTIFICATION_EMAIL');
+
+    if (!email || email.trim() === '') {
+      console.log('❌ スクリプトプロパティ「ERROR_NOTIFICATION_EMAIL」が設定されていません。');
+      console.log('送信テストをスキップします。');
+      return;
+    }
+
+    console.log('設定されている送信先: ' + email);
+    console.log('テストメールを送信します...');
+
+    const subject = '【テスト】在庫配布処理 エラーメール送信テスト';
+    const body = 'このメールは DistributeInventory プロジェクトの testSendErrorMail() 関数から送信されたテストメールです。\n\n' +
+                 '■ 送信日時: ' + new Date().toLocaleString() + '\n' +
+                 '■ ステータス: 正常動作中\n\n' +
+                 'このメールを受信できた場合、エラー発生時の通知連携設定は正常に機能しています。';
+
+    sendErrorMail(subject, body);
+    
+    console.log('\n✓ テストメール送信処理が完了しました。');
+    console.log('  受信トレイを確認し、実際にメールが届いていることをご確認ください。');
+
+  } catch (error) {
+    console.error('❌ エラー: ' + error.message);
+  }
+
+  console.log('\n=== テスト10 完了 ===');
+}
