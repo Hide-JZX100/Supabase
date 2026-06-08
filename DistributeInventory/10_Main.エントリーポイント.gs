@@ -83,6 +83,16 @@ function distributeInventoryChanges() {
           context: 'distributeInventoryChanges - ' + config.sheet,
           errorMessage: error.message
         });
+
+        // エラー通知メールを送信
+        const subject = '【警告】在庫配布処理 シート更新エラー（' + config.configKey + '）';
+        const body = '在庫配布処理でシート更新中にエラーが発生しました。\n\n' +
+                     '■ 発生日時: ' + new Date().toLocaleString() + '\n' +
+                     '■ 設定キー: ' + config.configKey + '\n' +
+                     '■ スプレッドシートID: ' + config.id + '\n' +
+                     '■ 対象シート: ' + config.sheet + '\n' +
+                     '■ エラー内容:\n' + error.message;
+        sendErrorMail(subject, body);
       }
     }
 
@@ -99,7 +109,14 @@ function distributeInventoryChanges() {
 
   } catch (error) {
     logError('❌ 在庫配布処理（全体）で重大なエラーが発生しました: ' + error.message);
-    // 全体エラー時は最終実行日時を更新しない
+    
+    // 重大エラー通知メールを送信
+    const subject = '【重要・エラー】在庫配布処理 重大なエラーが発生しました';
+    const body = '在庫配布処理の実行中に、システム全体に影響する重大なエラーが発生しました。処理は中断されています。\n\n' +
+                 '■ 発生日時: ' + new Date().toLocaleString() + '\n' +
+                 '■ エラー内容:\n' + error.message + '\n\n' +
+                 '※ Supabase への接続状態やスクリプトプロパティ（SHEET_CONFIG_1 など）の設定値を確認してください。';
+    sendErrorMail(subject, body);
   }
 }
 
@@ -169,6 +186,13 @@ function initializeAllSheets() {
 
   } catch (error) {
     logError('❌ 全件初期化処理で重大なエラーが発生しました: ' + error.message);
+
+    // 重大エラー通知メールを送信
+    const subject = '【重要・エラー】在庫配布処理 初期化処理中に重大なエラーが発生しました';
+    const body = '手動の全件初期化処理の実行中に、重大なエラーが発生しました。\n\n' +
+                 '■ 発生日時: ' + new Date().toLocaleString() + '\n' +
+                 '■ エラー内容:\n' + error.message;
+    sendErrorMail(subject, body);
   }
 }
 

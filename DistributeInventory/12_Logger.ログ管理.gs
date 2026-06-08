@@ -194,3 +194,43 @@ function logErrorsToSheet(spreadsheetId, errorDetails) {
     console.error('エラーログ書き込み中にエラーが発生しました（スプレッドシートID: ' + spreadsheetId + '）:', error.message);
   }
 }
+
+// ============================================================================
+// メール通知送信
+// ============================================================================
+
+/**
+ * 登録された管理用メールアドレス宛にエラー通知メールを送信する
+ *
+ * スクリプトプロパティ `ERROR_NOTIFICATION_EMAIL` が設定されている場合のみ送信します。
+ * 送信処理自体でエラーが発生した場合は、コンソールにエラーを出力します（無限ループ防止）。
+ *
+ * @param {string} subject - メールの件名
+ * @param {string} body    - メールの本文
+ * @return {void}
+ */
+function sendErrorMail(subject, body) {
+  try {
+    const properties = PropertiesService.getScriptProperties();
+    const email = properties.getProperty('ERROR_NOTIFICATION_EMAIL');
+
+    if (!email || email.trim() === '') {
+      logWithLevel(LOG_LEVEL.SUMMARY, '通知用メールアドレスが設定されていないため、メール送信をスキップします。');
+      return;
+    }
+
+    logWithLevel(LOG_LEVEL.SUMMARY, 'エラー通知メールを送信中... 送信先: ' + email);
+    
+    MailApp.sendEmail({
+      to: email,
+      subject: subject,
+      body: body
+    });
+
+    logWithLevel(LOG_LEVEL.SUMMARY, 'エラー通知メールを正常に送信しました。');
+
+  } catch (error) {
+    // メール送信時のエラーは無限ループを防ぐため、console.error のみで出力する
+    console.error('エラー通知メール送信中に例外が発生しました:', error.message);
+  }
+}

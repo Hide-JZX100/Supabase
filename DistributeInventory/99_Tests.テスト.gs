@@ -430,6 +430,42 @@ function testUpdateInventoryRows() {
 
     console.log('書き込み後シートの最終行: ' + sheet.getLastRow() + ' 行');
 
+    // === アサーション（書き込み整合性検証） ===
+    console.log('\n書き込み結果のアサーション（整合性検証）を実行します...');
+    const assertMap = buildRowIndexMap(sheet);
+    
+    // 1. 既存行の上書き検証
+    const existingRowNo = assertMap.get(existingGoodsCode);
+    if (existingRowNo) {
+      const rowData = sheet.getRange(existingRowNo, 1, 1, TOTAL_COLUMNS).getValues()[0];
+      const name = rowData[DISTRIBUTE_COLUMNS.GOODS_NAME];
+      const stock = rowData[DISTRIBUTE_COLUMNS.STOCK_QTY];
+      const free = rowData[DISTRIBUTE_COLUMNS.FREE_QTY];
+      if (name === 'テスト商品（既存更新テスト）' && Number(stock) === 99 && Number(free) === 90) {
+        console.log('  ✓ 既存行の上書き検証OK (' + existingGoodsCode + ': 商品名=' + name + ', 在庫数=' + stock + ', フリー在庫=' + free + ')');
+      } else {
+        console.error('  ❌ 既存行の上書き検証NG (' + existingGoodsCode + ': 商品名=' + name + ', 在庫数=' + stock + ', フリー在庫=' + free + ')');
+      }
+    } else {
+      console.error('  ❌ 既存テスト行が見つかりません: ' + existingGoodsCode);
+    }
+
+    // 2. 新規行の追記検証
+    const newGoodsCode = testChangedData[1]['商品コード'];
+    const newRowNo = assertMap.get(newGoodsCode);
+    if (newRowNo) {
+      const rowData = sheet.getRange(newRowNo, 1, 1, TOTAL_COLUMNS).getValues()[0];
+      const name = rowData[DISTRIBUTE_COLUMNS.GOODS_NAME];
+      const stock = rowData[DISTRIBUTE_COLUMNS.STOCK_QTY];
+      if (name === 'テスト商品（新規追記テスト）' && Number(stock) === 5) {
+        console.log('  ✓ 新規行の追記検証OK (' + newGoodsCode + ': 商品名=' + name + ', 在庫数=' + stock + ')');
+      } else {
+        console.error('  ❌ 新規行の追記検証NG (' + newGoodsCode + ': 商品名=' + name + ', 在庫数=' + stock + ')');
+      }
+    } else {
+      console.error('  ❌ 新規テスト行が見つかりません: ' + newGoodsCode);
+    }
+
   } catch (error) {
     console.error('❌ エラー: ' + error.message);
   }
@@ -545,4 +581,48 @@ function testFullFlow() {
   }
 
   console.log('\n=== テスト9 完了 ===');
+}
+
+/**
+ * 【テスト10】エラーメール送信テスト
+ *
+ * スクリプトプロパティ `ERROR_NOTIFICATION_EMAIL` が正しく設定されていることを確認し、
+ * テスト用のエラーメールを送信します。
+ *
+ * 【確認ポイント】
+ * - エラーなく送信処理が完了すること
+ * - 実際に指定のアドレスにメールが届くこと
+ */
+function testSendErrorMail() {
+  console.log('=== テスト10: エラーメール送信テスト ===\n');
+
+  try {
+    const properties = PropertiesService.getScriptProperties();
+    const email = properties.getProperty('ERROR_NOTIFICATION_EMAIL');
+
+    if (!email || email.trim() === '') {
+      console.log('❌ スクリプトプロパティ「ERROR_NOTIFICATION_EMAIL」が設定されていません。');
+      console.log('送信テストをスキップします。');
+      return;
+    }
+
+    console.log('設定されている送信先: ' + email);
+    console.log('テストメールを送信します...');
+
+    const subject = '【テスト】在庫配布処理 エラーメール送信テスト';
+    const body = 'このメールは DistributeInventory プロジェクトの testSendErrorMail() 関数から送信されたテストメールです。\n\n' +
+                 '■ 送信日時: ' + new Date().toLocaleString() + '\n' +
+                 '■ ステータス: 正常動作中\n\n' +
+                 'このメールを受信できた場合、エラー発生時の通知連携設定は正常に機能しています。';
+
+    sendErrorMail(subject, body);
+    
+    console.log('\n✓ テストメール送信処理が完了しました。');
+    console.log('  受信トレイを確認し、実際にメールが届いていることをご確認ください。');
+
+  } catch (error) {
+    console.error('❌ エラー: ' + error.message);
+  }
+
+  console.log('\n=== テスト10 完了 ===');
 }

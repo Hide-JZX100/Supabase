@@ -39,19 +39,22 @@ function buildRowIndexMap(sheet) {
 }
 
 /**
- * 差分データを既存シートに上書き更新する。商品コードが存在しない行は末尾に追記する。
+ * 差分データを既存シートに上書き更新する。商品コードが存在しない行は末尾に追記する。（メモリ上一括更新版）
  *
  * 【処理フロー】
  * 1. 引数の変更データ配列が空の場合は即座に処理終了。
- * 2. buildRowIndexMap() を呼び出して「商品コード→行番号」の Map を作成。
- * 3. 変更データを1件ずつループ処理：
+ * 2. シートの最終行を取得する。
+ * 3. 2行目から最終行までの全データ（A列〜M列）を getValues() で取得し、メモリ上に保持する（データがなければ空配列）。
+ * 4. 既存データの配列から「商品コード -> 配列インデックス（0始まり）」の Map を作成。
+ * 5. 変更データを1件ずつループ処理：
  *    a. レコードデータを 11_Config.gs の列定義（13列）に合わせた配列に変換。
  *    b. Map 内に商品コードが存在するか判定。
- *    c. 存在する場合：該当行を getRange(rowIndex, 1, 1, 13).setValues() で上書き更新。
- *    d. 存在しない場合：シートの最終行の次の行に getRange(lastRow + 1, 1, 1, 13).setValues() で追記。
- *       追記後、同一実行内での重複追記を防ぐため、Map に追加登録する。
- *    e. 更新日時列（M列）の数値フォーマットを 'yyyy/mm/dd hh:mm:ss' に設定。
- * 4. 更新件数と追記件数をログ出力し、結果オブジェクトを返却する。
+ *    c. 存在する場合：メモリ上の該当インデックスの行データを上書き。
+ *    d. 存在しない場合：メモリ上の配列の末尾に追記。
+ *       追記後、同一実行内での重複追記を防ぐため、Map に追加登録（インデックス: 配列の元の長さ）する。
+ * 6. メモリ上の全データをシートの2行目から一括書き込み（setValues()）。
+ * 7. 更新日時列（M列）の数値フォーマットを 'yyyy/mm/dd hh:mm:ss' に一括設定。
+ * 8. 更新件数と追記件数をログ出力し、結果オブジェクトを返却する。
  *
  * @param {GoogleAppsScript.Spreadsheet.Sheet} sheet - 対象シートオブジェクト
  * @param {Array<Object>} changedData - Supabaseから取得した差分レコードの配列
@@ -62,7 +65,23 @@ function updateInventoryRows(sheet, changedData) {
     return { updated: 0, appended: 0 };
   }
 
-  const rowIndexMap = buildRowIndexMap(sheet);
+  const lastRow = sheet.getLastRow();
+  let existingRows = [];
+
+  if (lastRow >= 2) {
+    // 2行目から最終行まで一括取得
+    existingRows = sheet.getRange(2, 1, lastRow - 1, TOTAL_COLUMNS).getValues();
+  }
+
+  // 商品コード -> existingRows のインデックス (0始まり) のマップを作成
+  const rowIndexMap = new Map();
+  for (let i = 0; i < existingRows.length; i++) {
+    const code = existingRows[i][DISTRIBUTE_COLUMNS.GOODS_CODE];
+    if (code !== undefined && code !== null && code !== '') {
+      rowIndexMap.set(code.toString(), i);
+    }
+  }
+
   let updatedCount = 0;
   let appendedCount = 0;
 
@@ -90,28 +109,31 @@ function updateInventoryRows(sheet, changedData) {
     ];
 
     const goodsCodeStr = goodsCode.toString();
-    const rowIndex = rowIndexMap.get(goodsCodeStr);
+    const arrayIndex = rowIndexMap.get(goodsCodeStr);
 
-    if (rowIndex) {
-      // 既存行を更新 (setValues に渡すため 2次元配列にする)
-      sheet.getRange(rowIndex, 1, 1, TOTAL_COLUMNS).setValues([rowValues]);
-      // 更新日時のフォーマット（M列）
-      sheet.getRange(rowIndex, DISTRIBUTE_COLUMNS.UPDATED_AT + 1).setNumberFormat('yyyy/mm/dd hh:mm:ss');
+    if (arrayIndex !== undefined) {
+      // 既存行をメモリ上で上書き
+      existingRows[arrayIndex] = rowValues;
       updatedCount++;
     } else {
-      // 新規行を追記
-      const lastRow = sheet.getLastRow();
-      const newRowIndex = lastRow + 1;
-      sheet.getRange(newRowIndex, 1, 1, TOTAL_COLUMNS).setValues([rowValues]);
-      sheet.getRange(newRowIndex, DISTRIBUTE_COLUMNS.UPDATED_AT + 1).setNumberFormat('yyyy/mm/dd hh:mm:ss');
-
+      // 新規行をメモリ上の配列の末尾に追記
+      existingRows.push(rowValues);
       // 同一バッチ内での重複追記を防ぐためMapを更新
-      rowIndexMap.set(goodsCodeStr, newRowIndex);
+      rowIndexMap.set(goodsCodeStr, existingRows.length - 1);
       appendedCount++;
     }
   }
 
-  logWithLevel(LOG_LEVEL.MINIMAL, 'シート「' + sheet.getName() + '」更新完了: 更新 ' + updatedCount + ' 件 / 新規追記 ' + appendedCount + ' 件');
+  // メモリ上のデータが存在する場合、一括書き込みを実行
+  if (existingRows.length > 0) {
+    // 2行目から一括書き込み
+    sheet.getRange(2, 1, existingRows.length, TOTAL_COLUMNS).setValues(existingRows);
+    // 更新日時列（M列）のフォーマットを一括設定
+    sheet.getRange(2, DISTRIBUTE_COLUMNS.UPDATED_AT + 1, existingRows.length, 1)
+      .setNumberFormat('yyyy/mm/dd hh:mm:ss');
+  }
+
+  logWithLevel(LOG_LEVEL.MINIMAL, 'シート「' + sheet.getName() + '」更新完了 (一括書き込み): 更新 ' + updatedCount + ' 件 / 新規追記 ' + appendedCount + ' 件');
   return { updated: updatedCount, appended: appendedCount };
 }
 
