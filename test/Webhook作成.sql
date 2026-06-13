@@ -1,10 +1,10 @@
--- 1. 通信プラグイン（pg_net）をシステム専用の部屋に確実にONにする
-CREATE EXTENSION IF NOT EXISTS pg_net SCHEMA extensions;
-
--- 2. Webhook用の部屋（スキーマ）を強制的に作成する
-CREATE SCHEMA IF NOT EXISTS supabase_functions;
-
--- 3. UI（画面）が欲しがっている「荷物配送用の関数（http_request）」を手動で完璧に設置する
+-- ==========================================
+-- 関数名: supabase_functions.http_request
+-- 概要: テーブルのデータ変動（INSERT/UPDATE/DELETE）を検知し、GAS経由で外部システムと同期するためのWebhookトリガー関数。
+-- 修正内容:
+--   1. pg_netプラグインの正しい関数名「net_http_post」を適用
+--   2. body引数の型エラー(42883)を回避するため、payloadをtext型へキャスト(payload::text)
+-- ==========================================
 CREATE OR REPLACE FUNCTION supabase_functions.http_request()
  RETURNS trigger
  LANGUAGE plpgsql
@@ -28,9 +28,10 @@ BEGIN
   );
 
   -- 構築したプラグインを使って、安全にGASのURLへPOST送信する
+  -- ※関数名を net_http_post に修正し、body を text型 にキャスト
   SELECT extensions.net_http_post(
     url := url,
-    body := payload,
+    body := payload::text, 
     headers := jsonb_build_object('Content-Type', 'application/json') || headers
   ) INTO request_id;
 
