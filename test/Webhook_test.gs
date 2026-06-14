@@ -6,7 +6,8 @@
  * 戻り値: TextOutput - Supabase側へ処理完了を伝える応答（JSON形式）
  * 設計思想: 最小限のコードでSupabaseからのデータ受信・解析・書き出しを行い、
  *           インフラ間の疎通確認（テスト）を最速で完了させる。
- *           ※DELETE（削除）イベント時にもデータが記録できるよう、条件分岐を追加。
+ *           ※DELETE（削除）イベントへの対応に続き、データから「id」をピンポイントで
+ *             抜き出す処理を追加。
  * ==============================================================================
  */
 function doPost(e) {
@@ -27,7 +28,7 @@ function doPost(e) {
         var type = data.type;                   // 操作の種類（INSERT, UPDATE, DELETEなど）
         var tableName = data.table;             // 動いたテーブル名
 
-        // 【修正・追加】操作の種類によって、取得するデータの場所を切り替える
+        // 操作の種類によって、取得するデータの場所を切り替える
         var recordData;
         if (type === "DELETE") {
             // 削除（DELETE）の場合は、消える直前のデータ（old_record）を取得する
@@ -37,12 +38,17 @@ function doPost(e) {
             recordData = data.record;
         }
 
+        // 【追加】データ（オブジェクト）の中から「id」の値をピンポイントで抜き出す
+        // N88-BASICでいう、レコードから特定のフィールドを読み出す操作にあたります
+        var id = recordData ? recordData.id : "IDなし";
+
         // 抜き出したデータを文字として保存できるように変換する
         var displayRecord = JSON.stringify(recordData);
 
         // 6. スプレッドシートの最終行の「次の行」に、データを1行追加する
-        // [ 受信時刻, 操作, テーブル名, 届いたデータの中身 ]
-        sheet.appendRow([now, type, tableName, displayRecord]);
+        // 【修正】4番目の列に「抜き出したID」を独立させて追加しました
+        // [ 受信時刻, 操作, テーブル名, 抜き出したID, 届いたデータの中身 ]
+        sheet.appendRow([now, type, tableName, id, displayRecord]);
 
         // 7. Supabase側に対して「無事に届いたよ（Status: 200）」と返事をする（お作法です）
         return ContentService.createTextOutput(JSON.stringify({ "status": "success" }))
