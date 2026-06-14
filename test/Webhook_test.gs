@@ -6,11 +6,22 @@
  * 戻り値: TextOutput - Supabase側へ処理完了を伝える応答（JSON形式）
  * 設計思想: 最小限のコードでSupabaseからのデータ受信・解析・書き出しを行い、
  *           インフラ間の疎通確認（テスト）を最速で完了させる。
- *           ※複数カラム（item_code, stock）の同期に対応。
+ *           ※複数カラム同期の競合（逆転現象）を防ぐため、LockServiceによる
+ *             排他制御（一列に並べて処理する仕組み）を追加。
  * ==============================================================================
  */
 function doPost(e) {
+    // 【追加】スクリプト全体のロック（鍵）を取得する準備
+    var lock = LockService.getScriptLock();
+
     try {
+        // 【追加】最大30秒間、先行する他の処理が終わるのを待つ（一列に並ばせる）
+        // 30秒待っても鍵が開かない場合はタイムアウトエラーにします
+        if (!lock.tryLock(30000)) {
+            return ContentService.createTextOutput(JSON.stringify({ "status": "error", "message": "Lock timeout" }))
+                .setMimeType(ContentService.MimeType.JSON);
+        }
+
         // 1. スプレッドシートの書き出し先を特定する
         var ss = SpreadsheetApp.getActiveSpreadsheet();
         var logSheet = ss.getSheetByName("シート1");
@@ -49,16 +60,13 @@ function doPost(e) {
         // 7. test_webhookシートへのリアルタイム同期処理（複数カラム対応）
         if (syncSheet && recordData && id !== "IDなし") {
 
-            // 【変更・追加】複数の項目をそれぞれ変数に抜き出す
-            var itemCode = recordData["item_code"] || ""; // 商品コード（空なら空文字）
-            var stock = recordData["stock"] !== undefined ? recordData["stock"] : 0; // 在庫数（無ければ0）
+            var itemCode = recordData["item_code"] || "";
+            var stock = recordData["stock"] !== undefined ? recordData["stock"] : 0;
 
             if (type === "INSERT") {
-                // 【新規追加】A列にid、B列に商品コード、C列に在庫数を綺麗に並べて追加
                 syncSheet.appendRow([id, itemCode, stock]);
 
             } else if (type === "UPDATE" || type === "DELETE") {
-                // 【更新・削除】対象のIDがシートの何行目にあるか探す
                 var lastRow = syncSheet.getLastRow();
                 if (lastRow > 1) {
                     var idValues = syncSheet.getRange(2, 1, lastRow - 1, 1).getValues();
@@ -71,14 +79,10 @@ function doPost(e) {
                         }
                     }
 
-                    // 対象の行が見つかった場合の処理
                     if (targetRow !== -1) {
                         if (type === "UPDATE") {
-                            // 【変更】更新時は、B列（商品コード）とC列（在庫数）を両方最新にする
-                            // getRange(行, 列, 行数, 列数) で2列分の範囲を指定し、一括で上書きします
                             syncSheet.getRange(targetRow, 2, 1, 2).setValues([[itemCode, stock]]);
                         } else if (type === "DELETE") {
-                            // 見つかった行を丸ごと削除する
                             syncSheet.deleteRow(targetRow);
                         }
                     }
@@ -86,10 +90,16 @@ function doPost(e) {
             }
         }
 
+        // 【追加】すべての処理が正常に終わったので、鍵をアンロックして次の処理へ譲る
+        lock.releaseLock();
+
         return ContentService.createTextOutput(JSON.stringify({ "status": "success" }))
             .setMimeType(ContentService.MimeType.JSON);
 
     } catch (error) {
+        // 【追加】万が一エラーが起きた場合も、確実に鍵を解除して後続の処理を詰まらせないようにする
+        lock.releaseLock();
+
         console.error("エラーが発生しました: " + error.toString());
         return ContentService.createTextOutput(JSON.stringify({ "status": "error", "message": error.toString() }))
             .setMimeType(ContentService.MimeType.JSON);
