@@ -6,14 +6,16 @@
  * 戻り値: TextOutput - Supabase側へ処理完了を伝える応答（JSON形式）
  * 設計思想: 最小限のコードでSupabaseからのデータ受信・解析・書き出しを行い、
  *           インフラ間の疎通確認（テスト）を最速で完了させる。
- *           ※DELETE（削除）イベントへの対応に続き、データから「id」をピンポイントで
- *             抜き出す処理を追加。
+ *           ※INSERT（新規追加）イベント発生時に、指定の同期用シートへ
+ *             カラムごとにデータを成形して格納する同期処理を追加。
  * ==============================================================================
  */
 function doPost(e) {
     try {
         // 1. スプレッドシートの書き出し先を特定する
-        var sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName("シート1");
+        var ss = SpreadsheetApp.getActiveSpreadsheet();
+        var logSheet = ss.getSheetByName("シート1");
+        var syncSheet = ss.getSheetByName("test_webhook"); // 【追加】同期用のシートを特定
 
         // 2. 現在の時刻を取得（データがいつ届いたか記録するため）
         var now = new Date();
@@ -38,19 +40,26 @@ function doPost(e) {
             recordData = data.record;
         }
 
-        // 【追加】データ（オブジェクト）の中から「id」の値をピンポイントで抜き出す
-        // N88-BASICでいう、レコードから特定のフィールドを読み出す操作にあたります
+        // データ（オブジェクト）の中から「id」の値をピンポイントで抜き出す
         var id = recordData ? recordData.id : "IDなし";
 
         // 抜き出したデータを文字として保存できるように変換する
         var displayRecord = JSON.stringify(recordData);
 
-        // 6. スプレッドシートの最終行の「次の行」に、データを1行追加する
-        // 【修正】4番目の列に「抜き出したID」を独立させて追加しました
-        // [ 受信時刻, 操作, テーブル名, 抜き出したID, 届いたデータの中身 ]
-        sheet.appendRow([now, type, tableName, id, displayRecord]);
+        // 6. スプレッドシートの最終行の「次の行」に、データを1行追加する（ログ用）
+        logSheet.appendRow([now, type, tableName, id, displayRecord]);
 
-        // 7. Supabase側に対して「無事に届いたよ（Status: 200）」と返事をする（お作法です）
+        // 【新設】7. test_webhookシートへのリアルタイム同期処理（まずはINSERTから）
+        if (type === "INSERT" && recordData) {
+            // カラム名「１」のような全角・マルチバイト文字のキーは、
+            // ドット（.）ではなく、ブラケット記法（ ["１"] ）を使うことで安全に取得できます
+            var columnValue = recordData["１"];
+
+            // 同期用シートの末尾に [ ID, １の値 ] を綺麗に並べて1行追加
+            syncSheet.appendRow([id, columnValue]);
+        }
+
+        // 8. Supabase側に対して「無事に届いたよ（Status: 200）」と返事をする（お作法です）
         return ContentService.createTextOutput(JSON.stringify({ "status": "success" }))
             .setMimeType(ContentService.MimeType.JSON);
 
