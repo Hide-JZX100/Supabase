@@ -28,7 +28,7 @@
 // ============================================================================
 
 /** 1回のRPC呼び出しで送信するレコード数 */
-const SUPABASE_CHUNK_SIZE = 500;
+const SUPABASE_CHUNK_SIZE = 1000;
 
 /** Supabase REST API の1回のクエリで取得するレコード数上限 */
 const SUPABASE_QUERY_LIMIT = 5000;
@@ -54,7 +54,7 @@ const SUPABASE_QUERY_LIMIT = 5000;
  */
 function buildSupabasePayload(goodsMap) {
   const payload = [];
-  
+
   // 安全な数値パースヘルパー
   const parseVal = (val) => {
     const parsed = parseInt(val, 10);
@@ -82,7 +82,7 @@ function buildSupabasePayload(goodsMap) {
       "JANコード": janCodeValue
     });
   }
-  
+
   return payload;
 }
 
@@ -107,58 +107,58 @@ function buildSupabasePayload(goodsMap) {
  */
 function upsertInventoryToSupabase(goodsMap) {
   const startTime = new Date();
-  
+
   try {
     const allRecords = buildSupabasePayload(goodsMap);
     const totalRecords = allRecords.length;
     const chunkCount = Math.ceil(totalRecords / SUPABASE_CHUNK_SIZE);
-    
+
     logWithLevel(LOG_LEVEL.MINIMAL, 'Supabaseへの書き込み開始: ' + totalRecords + '件 / ' + chunkCount + 'チャンク');
 
     let successChunks = 0;
     let errorChunks = 0;
-    
+
     for (let i = 0; i < totalRecords; i += SUPABASE_CHUNK_SIZE) {
       const chunk = allRecords.slice(i, i + SUPABASE_CHUNK_SIZE);
       const chunkNumber = Math.floor(i / SUPABASE_CHUNK_SIZE) + 1;
-      
+
       logWithLevel(LOG_LEVEL.SUMMARY, '  チャンク ' + chunkNumber + '/' + chunkCount + ': ' + chunk.length + '件 送信中...');
-      
+
       const chunkStartTime = new Date();
-      
+
       try {
         // RPC 呼び出し
         callSupabaseRpc('upsert_ne_inventory_data', { json_data: chunk });
-        
+
         const chunkDuration = new Date() - chunkStartTime;
         successChunks++;
         logWithLevel(LOG_LEVEL.MINIMAL, '  チャンク ' + chunkNumber + '/' + chunkCount + ': ✓ 完了（ステータス: 200/204, ' + chunkDuration + 'ms）');
-        
+
       } catch (chunkError) {
         errorChunks++;
         logError('  チャンク ' + chunkNumber + '/' + chunkCount + ': ✗ 失敗 - ' + chunkError.message);
       }
     }
-    
+
     const totalDuration = ((new Date() - startTime) / 1000).toFixed(1);
-    
+
     // 全体サマリーログ
     logWithLevel(LOG_LEVEL.MINIMAL, 'Supabaseへの書き込み完了: ' + totalRecords + '件 (処理時間: ' + totalDuration + '秒)');
-    
+
     // SRE的品質向上：成功率の出力
     const successRate = ((successChunks / chunkCount) * 100).toFixed(1);
     logWithLevel(LOG_LEVEL.MINIMAL, '  ✓ チャンク成功率: ' + successRate + '% (' + successChunks + '/' + chunkCount + 'チャンク成功)');
-    
+
     if (errorChunks > 0) {
       logError('Supabase書き込み: ' + errorChunks + 'チャンクが失敗しました。詳細は上記ログを確認してください。');
     }
-    
+
     return {
       totalRecords: totalRecords,
       chunks: chunkCount,
       success: (errorChunks === 0)
     };
-    
+
   } catch (error) {
     logError('Supabase書き込み処理（全体）エラー: ', error.message);
     throw error;
@@ -228,10 +228,10 @@ function upsertStockToSupabase(inventoryDataMap) {
 
   try {
     callSupabaseRpc('upsert_ne_stock_data', { json_data: payload });
-    
+
     const duration = new Date() - startTime;
     logWithLevel(LOG_LEVEL.SUMMARY, '  Supabase在庫更新完了: ' + payload.length + '件 (' + duration + 'ms)');
-    
+
     return {
       records: payload.length,
       success: true
