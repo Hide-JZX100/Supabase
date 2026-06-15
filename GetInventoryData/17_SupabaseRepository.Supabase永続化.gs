@@ -9,7 +9,7 @@
  *
  * ### Phase 2（商品マスタ全件書き込み）
  * @see buildSupabasePayload      - goodsMapをSupabase用配列に変換
- * @see upsertInventoryToSupabase - 商品マスタデータを全件upsert（500件チャンク）
+ * @see upsertInventoryToSupabase - 商品マスタデータを全件upsert（1000件チャンク）
  *
  * ### Phase 3（在庫マスタ差分書き込み）
  * @see buildStockPayload         - inventoryDataMapをSupabase用配列に変換
@@ -89,14 +89,14 @@ function buildSupabasePayload(goodsMap) {
 /**
  * 在庫データを Supabase に全件 upsert する
  *
- * buildSupabasePayload で変換された配列をチャンク分割（500件）し、
+ * buildSupabasePayload で変換された配列をチャンク分割（1000件）し、
  * upsert_ne_inventory_data RPCを呼び出します。一部チャンクが失敗しても
  * 全体の処理を止めずに処理を継続します。
  *
  * 【処理フロー】
  * 1. buildSupabasePayload(goodsMap) を呼び出してペイロード配列を生成
  * 2. 配列サイズから必要なチャンク数（分割数）を計算
- * 3. 各チャンク（500件単位）ごとにスライスして送信用 payload を作成
+ * 3. 各チャンク（1000件単位）ごとにスライスして送信用 payload を作成
  * 4. 各チャンクごとに callSupabaseRpc('upsert_ne_inventory_data', { json_data: chunk }) を実行
  *    - 処理時間を計測しログに出力
  *    - エラー発生時は logError を呼び出し、カウントをインクリメント（例外は再スローせず継続）
