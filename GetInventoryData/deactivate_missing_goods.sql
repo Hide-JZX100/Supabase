@@ -21,10 +21,18 @@ RETURNS INT AS $$
 DECLARE
   updated_count INT;
 BEGIN
+  -- 安全対策: 配列がNULL、または要素数が0の場合は、全件非活性化を防ぐために 0 を返して終了
+  IF active_codes IS NULL OR array_length(active_codes, 1) IS NULL THEN
+    RETURN 0;
+  END IF;
+
+  -- 更新処理
   UPDATE public."NE_InventoryData"
   SET "is_active" = false
   WHERE "商品コード" != ALL(active_codes)
     AND "is_active" = true;
+
+  -- 更新された行数を取得
   GET DIAGNOSTICS updated_count = ROW_COUNT;
   RETURN updated_count;
 END;
