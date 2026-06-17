@@ -16,11 +16,11 @@
   ネクストエンジン API
       ↓ GAS が定期取得
   Google スプレッドシート A（メイン・IMPORTRANGE の起点）
-  Supabase / NE\\\_InventoryData テーブル
+  Supabase / NE_InventoryData テーブル
       ↑ 在庫変化があった商品の「更新日時」が更新される
 
 【DistributeInventory プロジェクト（新規構築）】
-  Supabase / NE\\\_InventoryData テーブル
+  Supabase / NE_InventoryData テーブル
       ↓ getChangedInventorySince() で差分取得
   Spreadsheet B（用途別）
   Spreadsheet C（用途別）
@@ -64,27 +64,27 @@
 
 |キー|値|
 |-|-|
-|`SUPABASE\\\_URL`|`https://---オーナーが設定---.supabase.co`|
-|`SUPABASE\\\_KEY`|Supabase anon key（publishable key）|
-|`SUPABASE\\\_LAST\\\_EXECUTED\\\_AT`|自動保存・初回は手動設定不要|
-|`LOG\\\_LEVEL`|`2`（SUMMARY 推奨）|
-|`TRIGGER\\\_FUNCTION\\\_NAME`|配布処理のメイン関数名|
-|`TRIGGER\\\_MODE`|`TODAY` または `TOMORROW`|
+|`SUPABASE_URL`|`https://---オーナーが設定---.supabase.co`|
+|`SUPABAS_KEY`|Supabase anon key（publishable key）|
+|`SUPABASE_LAST_EXECUTED_AT`|自動保存・初回は手動設定不要|
+|`LOG_LEVEL`|`2`（SUMMARY 推奨）|
+|`TRIGGER_FUNCTION_NAME`|配布処理のメイン関数名|
+|`TRIGGER_MODE`|`TODAY` または `TOMORROW`|
 
 \---
 
-## 4\. Supabase テーブル定義
+## 4. Supabase テーブル定義
 
 ### テーブル名
 
 ```
-public."NE\\\_InventoryData"
+public."NE_InventoryData"
 ```
 
 ### 列定義
 
 |列名（日本語）|型|備考|
-|-|-|-|
+|---|---|---|
 |商品コード|TEXT|PRIMARY KEY|
 |商品名|TEXT||
 |在庫数|INTEGER||
@@ -98,19 +98,23 @@ public."NE\\\_InventoryData"
 |欠品数|INTEGER||
 |JANコード|BIGINT|NULL あり|
 |更新日時|TIMESTAMP WITH TIME ZONE|在庫変化時のみ更新|
+|is_active|BOOLEAN|有効フラグ（有効: TRUE, 無効: FALSE）|
 
-### 更新日時の仕組み（重要）
+### 更新日時の仕組みと有効・無効管理（重要）
 
-Supabase 側の RPC 関数 `upsert\\\_ne\\\_stock\\\_data` が以下の条件で `更新日時` を更新する。
+Supabase 側の RPC 関数 `upsert_ne_stock_data` が以下の条件で `更新日時` を更新する。
 
 * 在庫数・引当数・フリー在庫数・欠品数のいずれかに変化がある → `更新日時` を `NOW()` に更新
 * 上記4列が全て前回と同じ → `更新日時` を変更しない（過去の日時を維持）
 
 これにより「更新日時 >= 前回実行日時」でフィルタすると、**実際に在庫が変化した商品のみ**が取得できる。
 
-\---
+また、商品マスタ同期時にネクストエンジンで削除された（同期対象から外れた）商品は、`deactivate_missing_goods` RPC関数により `is_active = false`（非活性化）に更新されます。
+`DistributeInventory` プロジェクトでは、Supabaseからデータを取得する際に `is_active = true`（有効）な商品のみをフィルタリングして取得します。
 
-## 5\. 書き込み先スプレッドシートの列構成
+---
+
+## 5. 書き込み先スプレッドシートの列構成
 
 GetInventoryData プロジェクト（書き込み側）のスプレッドシートは12列構成だった。  
 DistributeInventory プロジェクトでは **13列**（M列に更新日時を追加）で書き込む。
@@ -137,7 +141,7 @@ DistributeInventory プロジェクトでは **13列**（M列に更新日時を�
 
 新プロジェクトでそのまま流用・参考にできる実装が GetInventoryData プロジェクトに存在する。
 
-### 6-1. Supabase 接続（`16\\\_SupabaseClient.Supabase接続.gs`）
+### 6-1. Supabase 接続（`16_SupabaseClient.Supabase接続.gs`）
 
 新プロジェクトでも同じパターンで実装する。
 
@@ -145,10 +149,10 @@ DistributeInventory プロジェクトでは **13列**（M列に更新日時を�
 // Supabase接続設定を取得
 function getSupabaseConfig() {
     const properties = PropertiesService.getScriptProperties();
-    const url = properties.getProperty('SUPABASE\\\_URL');
-    const key = properties.getProperty('SUPABASE\\\_KEY');
+    const url = properties.getProperty('SUPABASE_URL');
+    const key = properties.getProperty('SUPABASE_KEY');
     if (!url || !key) {
-        throw new Error('SUPABASE\\\_URL および SUPABASE\\\_KEY を設定してください。');
+        throw new Error('SUPABASE_URL および SUPABASE_KEY を設定してください。');
     }
     return { url, key };
 }
@@ -158,7 +162,7 @@ function querySupabaseTable(tableName, queryParams) {
     const config = getSupabaseConfig();
     const queryString = Object.keys(queryParams)
         .map(key => encodeURIComponent(key) + '=' + encodeURIComponent(queryParams\\\[key]))
-        .join('\\\&');
+        .join('&');
     const url = config.url + '/rest/v1/' + encodeURIComponent(tableName) + '?' + queryString;
     const options = {
         method: 'get',
@@ -179,13 +183,13 @@ function querySupabaseTable(tableName, queryParams) {
 }
 ```
 
-### 6-2. 差分取得（`17\\\_SupabaseRepository.Supabase永続化.gs`）
+### 6-2. 差分取得（`17_SupabaseRepository.Supabase永続化.gs`）
 
 ```javascript
 // 指定日時以降に更新された商品を Supabase から取得する
 function getChangedInventorySince(since) {
     const sinceStr = (since instanceof Date) ? since.toISOString() : since;
-    const result = querySupabaseTable('NE\\\_InventoryData', {
+    const result = querySupabaseTable('NE_InventoryData', {
         '更新日時': 'gte.' + sinceStr,
         'order': '更新日時.desc',
         'limit': '5000'   // 現在の商品数は約3,200件
@@ -197,32 +201,32 @@ function getChangedInventorySince(since) {
 function saveLastExecutedAt() {
     const isoString = new Date().toISOString();
     PropertiesService.getScriptProperties()
-        .setProperty('SUPABASE\\\_LAST\\\_EXECUTED\\\_AT', isoString);
+        .setProperty('SUPABASE_LAST_EXECUTED_AT', isoString);
     return isoString;
 }
 
 // 最終実行日時を読み出す（未保存時は fallbackHours 時間前を返す）
 function loadLastExecutedAt(fallbackHours = 2) {
     const saved = PropertiesService.getScriptProperties()
-        .getProperty('SUPABASE\\\_LAST\\\_EXECUTED\\\_AT');
+        .getProperty('SUPABASE_LAST_EXECUTED_AT');
     if (saved) return new Date(saved);
-    return new Date(Date.now() - fallbackHours \\\* 60 \\\* 60 \\\* 1000);
+    return new Date(Date.now() - fallbackHours * 60 * 60 * 1000);
 }
 ```
 
 ### 6-3. トリガー設定（`トリガー設定.gs`）
 
 GetInventoryData プロジェクトの `トリガー設定.gs` と同じ実装をコピーして使用する。  
-スクリプトプロパティ `TRIGGER\\\_FUNCTION\\\_NAME` と `TRIGGER\\\_MODE` で制御する仕組みはそのまま流用できる。
+スクリプトプロパティ `TRIGGER_FUNCTION_NAME` と `TRIGGER_MODE` で制御する仕組みはそのまま流用できる。
 
 ### 6-4. コーディング規約
 
 GetInventoryData プロジェクトの規約をそのまま継承する。
 
-* **ファイル命名規則：** `NN\\\_英語名.日本語説明.gs`
+* **ファイル命名規則：** `NN_英語名.日本語説明.gs`
 * **ファイルヘッダー：** `@file` JSDoc 必須
 * **関数ヘッダー：** `@param` / `@return` / `@throws` 必須
-* **ログ出力：** `logWithLevel(LOG\\\_LEVEL.MINIMAL, ...)` を使用
+* **ログ出力：** `logWithLevel(LOG_LEVEL.MINIMAL, ...)` を使用
 * **エラーログ：** `logError()` を使用
 * **エラー処理：** `try-catch` → `logError()` → `throw` で再スロー
 
@@ -232,14 +236,14 @@ GetInventoryData プロジェクトの規約をそのまま継承する。
 
 ```
 DistributeInventory/
-├── 10\\\_Main.エントリーポイント.gs       ← メイン処理・オーケストレーション
-├── 11\\\_Config.設定管理.gs              ← 定数・設定値（ログレベル等）
-├── 12\\\_Logger.ログ管理.gs              ← ログ出力（GetInventoryDataから流用）
-├── 13\\\_SupabaseClient.Supabase接続.gs  ← Supabase GET リクエスト
-├── 14\\\_SupabaseRepository.差分取得.gs  ← getChangedInventorySince 等
-├── 15\\\_SheetRepository.シート書き込み.gs ← 各スプレッドシートへの書き込み
+├── 10_Main.エントリーポイント.gs       ← メイン処理・オーケストレーション
+├── 11_Config.設定管理.gs              ← 定数・設定値（ログレベル等）
+├── 12_Logger.ログ管理.gs              ← ログ出力（GetInventoryDataから流用）
+├── 13_SupabaseClient.Supabase接続.gs  ← Supabase GET リクエスト
+├── 14_SupabaseRepository.差分取得.gs  ← getChangedInventorySince 等
+├── 15_SheetRepository.シート書き込み.gs ← 各スプレッドシートへの書き込み
 ├── トリガー設定.gs                     ← GetInventoryDataから流用
-├── 99\\\_Tests.テスト.gs                  ← 動作確認・診断ツール
+├── 99_Tests.テスト.gs                  ← 動作確認・診断ツール
 └── README.md
 ```
 
@@ -273,9 +277,9 @@ distributeInventoryChanges()   ← トリガーに設定するメイン関数
 設定例（スクリプトプロパティ）：
 
 ```
-SHEET\\\_CONFIG\\\_1  : {"id":"スプレッドシートID\\\_B","sheet":"在庫管理"}
-SHEET\\\_CONFIG\\\_2  : {"id":"スプレッドシートID\\\_C","sheet":"発注管理"}
-SHEET\\\_CONFIG\\\_3  : {"id":"スプレッドシートID\\\_D","sheet":"欠品アラート"}
+SHEET_CONFIG_1  : {"id":"スプレッドシートID\\\_B","sheet":"在庫管理"}
+SHEET_CONFIG_2  : {"id":"スプレッドシートID\\\_C","sheet":"発注管理"}
+SHEET_CONFIG_3  : {"id":"スプレッドシートID\\\_D","sheet":"欠品アラート"}
 ```
 
 \---
@@ -316,9 +320,9 @@ SHEET\\\_CONFIG\\\_3  : {"id":"スプレッドシートID\\\_D","sheet":"欠品�
 
 ### Supabase の実績
 
-* `NE\\\_InventoryData` テーブル：約 3,200行
-* `upsert\\\_ne\\\_inventory\\\_data` RPC：商品マスタ全件 upsert（全列更新）
-* `upsert\\\_ne\\\_stock\\\_data` RPC：在庫マスタ差分 upsert（在庫数値列のみ更新）
+* `NE_InventoryData` テーブル：約 3,200行
+* `upsert_ne_inventory_data` RPC：商品マスタ全件 upsert（全列更新）
+* `upsert_ne_stock_data` RPC：在庫マスタ差分 upsert（在庫数値列のみ更新）
 * 差分なし商品の `更新日時` は変更されないことを確認済み
 
 \---

@@ -1,6 +1,9 @@
 # DistributeInventory (在庫情報配布システム)
 
-Supabase の `NE_InventoryData` テーブルに蓄積された在庫情報の差分を抽出し、指定された複数の社内確認用スプレッドシートに対して、商品コードで紐付けた「上書き更新（存在しない場合は末尾追記）」を行う Google Apps Script (GAS) プロジェクトです。
+Supabase の `NE_InventoryData` テーブルに蓄積された在庫情報のうち、**有効な商品（`is_active = true`）の差分**を抽出し、指定された複数の社内確認用スプレッドシートに対して、商品コードで紐付けた「上書き更新（存在しない場合は末尾追記）」を行う Google Apps Script (GAS) プロジェクトです。
+
+> [!NOTE]
+> ネクストエンジン側で削除・非表示となり、Supabase 側で非活性化（`is_active = false`）された商品は同期対象外となります。すでにスプレッドシートに同期済みの商品を消去したい場合は、手動で `initializeAllSheets`（全件初期化）を実行することで、有効な商品のみに再構成されます。
 
 ---
 

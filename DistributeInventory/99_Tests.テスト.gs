@@ -21,7 +21,10 @@
  * #### Phase 4: 全体フロー確認（Phase 4実装後に使用）
  * @see testFullFlow            - distributeInventoryChanges() の全体動作確認
  *
- * @version 1.0 (Phase 1 テスト実装)
+ * #### 追加テスト
+ * @see testIsActiveFiltering   - is_active フィルタリングの動作確認
+ *
+ * @version 1.1 (is_active フィルタリング テスト追加)
  */
 
 // ============================================================================
@@ -626,3 +629,65 @@ function testSendErrorMail() {
 
   console.log('\n=== テスト10 完了 ===');
 }
+
+/**
+ * 【テスト11】is_active フィルタリングの動作確認
+ *
+ * getChangedInventorySince() を用いて取得したデータの中に、
+ * is_active が false のレコードが含まれていないことを検証します。
+ *
+ * 【確認ポイント】
+ * - 取得したすべてのレコードで 'is_active' が true であること
+ * - エラーなく実行完了すること
+ */
+function testIsActiveFiltering() {
+  console.log('=== テスト11: is_active フィルタリング検証 ===\n');
+
+  try {
+    // 基準日時として十分に古い過去の日時（1970年1月1日）を指定し、Supabase の全件を取得
+    const epoch = new Date('1970-01-01T00:00:00Z');
+    console.log('1970-01-01 以降の全データを取得してフィルタリング状態を検証します...');
+    
+    const data = getChangedInventorySince(epoch);
+    console.log('✓ データ取得成功！ 件数: ' + data.length + '件\n');
+
+    if (data.length === 0) {
+      console.log('⚠️ 取得されたデータが 0件 のため、検証をスキップします。');
+      console.log('NE_InventoryData テーブルにデータが存在するか確認してください。');
+      return;
+    }
+
+    let activeCount = 0;
+    let inactiveCount = 0;
+    let nullOrUndefinedCount = 0;
+
+    for (const record of data) {
+      const isActive = record['is_active'];
+      if (isActive === true) {
+        activeCount++;
+      } else if (isActive === false) {
+        inactiveCount++;
+      } else {
+        // is_active カラムが存在しないか、NULL の場合
+        nullOrUndefinedCount++;
+      }
+    }
+
+    console.log('【検証結果】');
+    console.log('  is_active = true  の件数: ' + activeCount + ' 件');
+    console.log('  is_active = false の件数: ' + inactiveCount + ' 件 (期待値: 0 件)');
+    console.log('  is_active が未定義/NULL の件数: ' + nullOrUndefinedCount + ' 件 (期待値: 0 件)');
+
+    if (inactiveCount === 0 && nullOrUndefinedCount === 0) {
+      console.log('\n✓ 検証成功: すべての取得レコードが is_active = true でした！');
+    } else {
+      console.error('\n❌ 検証失敗: is_active が false、または未定義/NULL のレコードが含まれています。');
+    }
+
+  } catch (error) {
+    console.error('❌ エラー: ' + error.message);
+  }
+
+  console.log('\n=== テスト11 完了 ===');
+}
+
