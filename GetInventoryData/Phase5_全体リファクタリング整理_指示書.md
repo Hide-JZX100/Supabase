@@ -112,6 +112,7 @@ Google Apps Script（本プロジェクト）
 - ロケーションに `xxxxxx` を含む商品を除外（空欄は取得対象）
 - スプレッドシートと Supabase の **両方** に全件書き直し
 - ページネーション対応（1,000件 × 最大5ページ）
+- 同期対象から外れた（廃止された）商品を一括非アクティブ化（`deactivate_missing_goods` RPCの実行）
 - 実行完了後に翌日分トリガーを自動登録（自己スケジューリング方式）
 
 ### 2. 在庫情報リアルタイム更新（1日6回）
@@ -185,6 +186,7 @@ Google Apps Script（本プロジェクト）
 |--------|-----------|------|
 | `upsert_ne_inventory_data` | `updateInventoryDataFromGoodsMaster` | 商品マスタ全件 upsert（全列更新） |
 | `upsert_ne_stock_data` | `updateInventoryDataBatchWithRetry` | 在庫マスタ差分 upsert（在庫数値列のみ更新） |
+| `deactivate_missing_goods` | `updateInventoryDataFromGoodsMaster` | 同期対象から外れた（廃止）商品の一括非アクティブ化 |
 
 ### 差分更新の仕組み
 
@@ -452,7 +454,7 @@ Phase 2〜4 で段階的に追加された全関数が `@file` の公開関数�
 - [ ] README.md が本指示書のセクション3の内容に更新されている
 - [ ] アーキテクチャ図が正しく記述されている
 - [ ] スクリプトプロパティの全項目が記載されている
-- [ ] Supabase RPC 関数が2つ（`upsert_ne_inventory_data`・`upsert_ne_stock_data`）記載されている
+- [ ] Supabase RPC 関数が3つ（`upsert_ne_inventory_data`・`upsert_ne_stock_data`・`deactivate_missing_goods`）記載されている
 - [ ] テスト関数一覧が全て記載されている
 
 ### 作業3：ヘッダーコメント整備

@@ -380,6 +380,12 @@ function updateInventoryDataFromGoodsMaster() {
         const supabaseResult = upsertInventoryToSupabase(goodsMap);
         logWithLevel(LOG_LEVEL.MINIMAL, `Supabase書き込み完了: ${supabaseResult.totalRecords}件`);
 
+        // Step 5c: 廃止商品の非アクティブ化
+        logWithLevel(LOG_LEVEL.MINIMAL, '廃止商品の非アクティブ化中...');
+        const activeCodes = Array.from(goodsMap.keys());
+        const deactivateResult = callSupabaseRpc('deactivate_missing_goods', { active_codes: activeCodes });
+        logWithLevel(LOG_LEVEL.MINIMAL, `非アクティブ化完了: ${deactivateResult.body}件`);
+
         // Step 6: 実行タイムスタンプ記録
         recordExecutionTimestamp();
 
@@ -394,6 +400,7 @@ function updateInventoryDataFromGoodsMaster() {
         logWithLevel(LOG_LEVEL.MINIMAL, `取得件数  : ${goodsMap.size}件`);
         logWithLevel(LOG_LEVEL.MINIMAL, `書込件数  : ${writeResult.dataRows}行`);
         logWithLevel(LOG_LEVEL.MINIMAL, `Supabase  : ${supabaseResult.totalRecords}件（${supabaseResult.chunks}チャンク）`);
+        logWithLevel(LOG_LEVEL.MINIMAL, `非アクティブ化: ${deactivateResult.body}件`);
         logWithLevel(LOG_LEVEL.MINIMAL, `処理速度  : ${(goodsMap.size / duration).toFixed(1)}件/秒`);
 
     } catch (error) {
