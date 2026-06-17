@@ -19,7 +19,7 @@ const SUPABASE_QUERY_LIMIT = 1000;
  * 1. 引数の日時を ISO 8601 文字列に変換する。
  * 2. 取得結果を蓄積する配列 `allData` と `offset`（取得開始位置）を初期化。
  * 3. ループ内処理：
- *    a. querySupabaseTable() で 更新日時 >= since, limit=1000, offset=[現在の位置] の条件でリクエスト。
+ *    a. querySupabaseTable() で 更新日時 >= since, is_active = true, limit=1000, offset=[現在の位置] の条件でリクエスト。
  *    b. 取得データがない、または成否フラグが false の場合はエラーをスロー。
  *    c. 取得データを `allData` に追加。
  *    d. 今回取得した件数が `SUPABASE_QUERY_LIMIT` (1,000) 未満の場合、すべてのデータが取得できたと判断してループを抜ける。
@@ -27,7 +27,7 @@ const SUPABASE_QUERY_LIMIT = 1000;
  * 4. 取得した全データを配列で返す（0件の場合は空配列）。
  *
  * @param {Date|string} since - 取得基準日時（この日時以降に更新された商品を取得）
- * @return {Array<Object>} 変化した商品データの配列
+ * @return {Array<Object>} 変化した商品データの配列。is_active が true のレコードのみ。
  * @throws {Error} Supabase への接続エラーや通信エラーが発生した場合
  */
 function getChangedInventorySince(since) {
@@ -44,6 +44,7 @@ function getChangedInventorySince(since) {
 
       const result = querySupabaseTable('NE_InventoryData', {
         '更新日時': 'gte.' + sinceStr,
+        'is_active': 'eq.true',
         'order': '更新日時.desc',
         'limit': SUPABASE_QUERY_LIMIT.toString(),
         'offset': offset.toString()
