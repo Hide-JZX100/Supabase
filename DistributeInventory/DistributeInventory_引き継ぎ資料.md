@@ -65,7 +65,7 @@
 |キー|値|
 |-|-|
 |`SUPABASE_URL`|`https://---オーナーが設定---.supabase.co`|
-|`SUPABAS_KEY`|Supabase anon key（publishable key）|
+|`SUPABASE_KEY`|Supabase anon key（publishable key）|
 |`SUPABASE_LAST_EXECUTED_AT`|自動保存・初回は手動設定不要|
 |`LOG_LEVEL`|`2`（SUMMARY 推奨）|
 |`TRIGGER_FUNCTION_NAME`|配布処理のメイン関数名|
@@ -183,7 +183,7 @@ function querySupabaseTable(tableName, queryParams) {
 }
 ```
 
-### 6-2. 差分取得（`17_SupabaseRepository.Supabase永続化.gs`）
+### 6-2. 差分取得（`14_SupabaseRepository.差分取得.gs`）
 
 ```javascript
 // 指定日時以降に更新された商品を Supabase から取得する
@@ -192,7 +192,7 @@ function getChangedInventorySince(since) {
     const result = querySupabaseTable('NE_InventoryData', {
         '更新日時': 'gte.' + sinceStr,
         'order': '更新日時.desc',
-        'limit': '5000'   // 現在の商品数は約3,200件
+        'limit': '1000'   // 現在の商品数は約3,200件
     });
     return result.data;
 }
