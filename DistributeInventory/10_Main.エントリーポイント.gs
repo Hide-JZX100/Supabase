@@ -87,11 +87,11 @@ function distributeInventoryChanges() {
         // エラー通知メールを送信
         const subject = '【警告】在庫配布処理 シート更新エラー（' + config.configKey + '）';
         const body = '在庫配布処理でシート更新中にエラーが発生しました。\n\n' +
-                     '■ 発生日時: ' + new Date().toLocaleString() + '\n' +
-                     '■ 設定キー: ' + config.configKey + '\n' +
-                     '■ スプレッドシートID: ' + config.id + '\n' +
-                     '■ 対象シート: ' + config.sheet + '\n' +
-                     '■ エラー内容:\n' + error.message;
+          '■ 発生日時: ' + new Date().toLocaleString() + '\n' +
+          '■ 設定キー: ' + config.configKey + '\n' +
+          '■ スプレッドシートID: ' + config.id + '\n' +
+          '■ 対象シート: ' + config.sheet + '\n' +
+          '■ エラー内容:\n' + error.message;
         sendErrorMail(subject, body);
       }
     }
@@ -109,13 +109,13 @@ function distributeInventoryChanges() {
 
   } catch (error) {
     logError('❌ 在庫配布処理（全体）で重大なエラーが発生しました: ' + error.message);
-    
+
     // 重大エラー通知メールを送信
     const subject = '【重要・エラー】在庫配布処理 重大なエラーが発生しました';
     const body = '在庫配布処理の実行中に、システム全体に影響する重大なエラーが発生しました。処理は中断されています。\n\n' +
-                 '■ 発生日時: ' + new Date().toLocaleString() + '\n' +
-                 '■ エラー内容:\n' + error.message + '\n\n' +
-                 '※ Supabase への接続状態やスクリプトプロパティ（SHEET_CONFIG_1 など）の設定値を確認してください。';
+      '■ 発生日時: ' + new Date().toLocaleString() + '\n' +
+      '■ エラー内容:\n' + error.message + '\n\n' +
+      '※ Supabase への接続状態やスクリプトプロパティ（SHEET_CONFIG_1 など）の設定値を確認してください。';
     sendErrorMail(subject, body);
   }
 }
@@ -142,10 +142,21 @@ function initializeAllSheets() {
   logWithLevel(LOG_LEVEL.MINIMAL, '=== 全件初期化処理 開始 ===');
 
   try {
-    // 1970年を基準として全件データを取得
-    const epoch = new Date('1970-01-01T00:00:00Z');
+    // 全件データを商品コード昇順で取得（初期化専用クエリ・ページネーション対応）
     logWithLevel(LOG_LEVEL.MINIMAL, 'Supabase から全在庫データを取得します...');
-    const allData = getChangedInventorySince(epoch);
+    const allData = [];
+    let offset = 0;
+    while (true) {
+      const result = querySupabaseTable('NE_InventoryData', {
+        'is_active': 'eq.true',
+        'order': '商品コード.asc',
+        'limit': '1000',
+        'offset': offset.toString()
+      });
+      allData.push(...result.data);
+      if (result.data.length < 1000) break;
+      offset += 1000;
+    }
 
     if (!allData || allData.length === 0) {
       logWithLevel(LOG_LEVEL.MINIMAL, '⚠️ Supabase にデータが存在しません。処理を中断します。');
@@ -190,8 +201,8 @@ function initializeAllSheets() {
     // 重大エラー通知メールを送信
     const subject = '【重要・エラー】在庫配布処理 初期化処理中に重大なエラーが発生しました';
     const body = '手動の全件初期化処理の実行中に、重大なエラーが発生しました。\n\n' +
-                 '■ 発生日時: ' + new Date().toLocaleString() + '\n' +
-                 '■ エラー内容:\n' + error.message;
+      '■ 発生日時: ' + new Date().toLocaleString() + '\n' +
+      '■ エラー内容:\n' + error.message;
     sendErrorMail(subject, body);
   }
 }
