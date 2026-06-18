@@ -74,6 +74,7 @@ BEGIN
         "NE_InventoryData"."引当数"          IS DISTINCT FROM EXCLUDED."引当数" OR
         "NE_InventoryData"."フリー在庫数"    IS DISTINCT FROM EXCLUDED."フリー在庫数" OR
         "NE_InventoryData"."欠品数"          IS DISTINCT FROM EXCLUDED."欠品数" OR
-        "NE_InventoryData"."JANコード"         IS DISTINCT FROM EXCLUDED."JANコード";
+        "NE_InventoryData"."JANコード"         IS DISTINCT FROM EXCLUDED."JANコード" OR
+        "NE_InventoryData"."is_active"    = FALSE;  -- 非アクティブからの復活を検知
 END;
 $$ LANGUAGE plpgsql;
