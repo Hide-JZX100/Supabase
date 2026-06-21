@@ -53,3 +53,29 @@ function testDoPost() {
     console.log('=== testDoPost 終了 ===');
 }
 
+/**
+ * doGet(e) の動作確認を行うテスト関数
+ *
+ * 【テスト手順】
+ * 1. doGet(e) を直接呼び出し、返却されるJSONレスポンスを検証する
+ *
+ * @return {void}
+ */
+function testDoGet() {
+    console.log('=== testDoGet 開始 ===');
+
+    const dummyEvent = {};
+    const response = doGet(dummyEvent);
+    const responseContent = response.getContent();
+
+    console.log('レスポンス内容: ' + responseContent);
+
+    const resData = JSON.parse(responseContent);
+    if (resData.result === 'success' && resData.message.includes('正常に稼働しています')) {
+        console.log('✓ doGetのレスポンス検証: 成功');
+    } else {
+        console.error('❌ doGetのレスポンス検証: 失敗');
+    }
+
+    console.log('=== testDoGet 終了 ===');
+}
