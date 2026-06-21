@@ -50,3 +50,52 @@ function callReceiverWebApp(payload) {
         throw new Error(errorMsg);
     }
 }
+
+/** リトライ設定（受信側Web App呼び出し用） */
+const CALLER_RETRY_CONFIG = {
+    MAX_RETRIES: 3,
+    ENABLE_RETRY: true
+};
+
+/**
+ * 受信側(Receiver)のWeb AppへPOSTリクエストを送信する（リトライ付き）
+ *
+ * 【処理フロー】
+ * 1. callReceiverWebApp() を呼び出す
+ * 2. 失敗した場合、最大 CALLER_RETRY_CONFIG.MAX_RETRIES 回まで
+ *    エクスポネンシャルバックオフ（1秒→2秒→4秒）でリトライする
+ * 3. 全リトライが失敗した場合はエラーをスローする
+ *
+ * @param {Object} payload - 送信するデータオブジェクト
+ * @return {{success: boolean, statusCode: number, body: string}} レスポンス情報
+ * @throws {Error} 全リトライが失敗した場合
+ */
+function callReceiverWebAppWithRetry(payload) {
+    if (!CALLER_RETRY_CONFIG.ENABLE_RETRY) {
+        return callReceiverWebApp(payload);
+    }
+
+    let lastError = null;
+
+    for (let attempt = 1; attempt <= CALLER_RETRY_CONFIG.MAX_RETRIES; attempt++) {
+        try {
+            if (attempt > 1) {
+                console.log('  リトライ ' + attempt + '/' + CALLER_RETRY_CONFIG.MAX_RETRIES + '回目...');
+            }
+            return callReceiverWebApp(payload);
+
+        } catch (error) {
+            lastError = error;
+            console.error('  ✗ 送信エラー（試行 ' + attempt + '/' + CALLER_RETRY_CONFIG.MAX_RETRIES + '）: ' + error.message);
+
+            if (attempt < CALLER_RETRY_CONFIG.MAX_RETRIES) {
+                const waitSeconds = Math.pow(2, attempt - 1);
+                console.log('  → ' + waitSeconds + '秒後にリトライします...');
+                Utilities.sleep(waitSeconds * 1000);
+            }
+        }
+    }
+
+    throw new Error('受信側への送信に失敗しました（' + CALLER_RETRY_CONFIG.MAX_RETRIES + '回試行）: ' + lastError.message);
+}
+
