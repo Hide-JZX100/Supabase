@@ -41,3 +41,55 @@ function scheduleOneTimeTrigger(functionName, delayMs) {
     }
 }
 
+/**
+ * 発火済みのワンタイムトリガーを自分自身で削除する（後始末処理）
+ *
+ * トリガーで起動された関数の冒頭、または finally ブロックで必ず呼び出すこと。
+ * これにより「トリガー一覧」にゴミが残り続けることを防ぐ。
+ *
+ * 【処理フロー】
+ * 1. スクリプトプロパティから PENDING_TRIGGER_ID を取得する
+ * 2. ID が存在しない場合は何もせず終了する（既に削除済み、または手動実行された場合）
+ * 3. ScriptApp.getProjectTriggers() から該当IDのトリガーを検索し、見つかれば削除する
+ * 4. 削除の成否に関わらず、スクリプトプロパティから PENDING_TRIGGER_ID を削除する
+ *
+ * @return {boolean} トリガーの削除に成功した場合は true、対象が見つからなかった場合は false
+ */
+function cleanupFiredTrigger() {
+    const properties = PropertiesService.getScriptProperties();
+    const triggerId = properties.getProperty('PENDING_TRIGGER_ID');
+
+    if (!triggerId) {
+        console.log('PENDING_TRIGGER_ID が見つからないため、削除処理をスキップします。');
+        return false;
+    }
+
+    let deleted = false;
+
+    try {
+        const triggers = ScriptApp.getProjectTriggers();
+        for (const trigger of triggers) {
+            if (trigger.getUniqueId() === triggerId) {
+                ScriptApp.deleteTrigger(trigger);
+                deleted = true;
+                console.log('発火済みトリガーを削除しました: ID=' + triggerId);
+                break;
+            }
+        }
+
+        if (!deleted) {
+            console.warn('削除対象のトリガー(ID=' + triggerId + ')が見つかりませんでした。'
+                + '既に削除済みの可能性があります。');
+        }
+
+    } catch (error) {
+        console.error('トリガー削除中にエラーが発生しました: ' + error.message);
+
+    } finally {
+        // 削除の成否に関わらず、プロパティ上の参照はクリアする
+        properties.deleteProperty('PENDING_TRIGGER_ID');
+    }
+
+    return deleted;
+}
+
