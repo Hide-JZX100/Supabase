@@ -48,3 +48,35 @@ function testTriggerCreationAndCleanup() {
 
     console.log('=== testTriggerCreationAndCleanup 終了 ===');
 }
+
+/**
+ * 動的トリガーの自動実行と自己削除を検証するテスト
+ *
+ * 【テスト手順】
+ * 1. runMainProcess() を実行してダミー処理＋トリガー作成を行う
+ * 2. 直後に countTriggersFor('onDelayedTrigger') を取得し 1 件であることを確認する
+ * 3. TRIGGER_DELAY_MS（15秒）以上待機した後、自動実行ログを確認する
+ * 4. 実行後、GASエディタ上のトリガー一覧から自動的に削除されていることを目視で確認する
+ *
+ * @return {void}
+ */
+function testRunMainProcessAndAutoTrigger() {
+    console.log('=== testRunMainProcessAndAutoTrigger 開始 ===');
+
+    // メインプロセスを実行（トリガーが設定される）
+    runMainProcess();
+
+    const count = countTriggersFor('onDelayedTrigger');
+    console.log('現在のトリガー数: ' + count + ' (期待値: 1)');
+
+    if (count === 1) {
+        console.log('✓ トリガー設定確認: 成功');
+        console.log('約15秒後に onDelayedTrigger が自動実行されます。');
+        console.log('自動実行完了後、GASエディタの「実行数」ログで onDelayedTrigger が「完了」し、');
+        console.log('「トリガー」一覧からトリガーが消えることを確認してください。');
+    } else {
+        console.error('❌ トリガー設定確認: 失敗');
+    }
+
+    console.log('=== testRunMainProcessAndAutoTrigger 終了 ===');
+}
