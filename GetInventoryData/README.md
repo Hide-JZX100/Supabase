@@ -56,6 +56,9 @@ Google Apps Script（本プロジェクト）
 - `saveLastExecutedAt()` / `loadLastExecutedAt()` で前回実行日時を管理
 - 将来の外部連携・通知処理の基盤として利用可能
 
+### 4. 配布側（DistributeInventory）への動的ワンタイムトリガー連携
+在庫情報一括更新（`updateInventoryDataBatchWithRetry`）および商品マスタ同期（`updateInventoryDataFromGoodsMaster`）の完了後に、動的ワンタイムトリガーを生成し、指定時間（デフォルト30秒）経過後に配布側プロジェクトの Web App（Webhook）を呼び出します。これにより、従来の固定5分後起動スケジュールに依存せず、よりリアルタイム性の高い在庫情報の配布を実現します。
+
 ---
 
 ## 取得項目一覧
@@ -91,6 +94,8 @@ Google Apps Script（本プロジェクト）
 | `15_SpreadsheetRepository.データ永続化.gs` | スプレッドシートへの書き込み・ログ記録 |
 | `16_SupabaseClient.Supabase接続.gs` | Supabase 接続・RPC 呼び出し・REST API 汎用層 |
 | `17_SupabaseRepository.Supabase永続化.gs` | Supabase へのデータ書き込み・差分取得 |
+| `18_TriggerManager.トリガー管理.gs` | 動的ワンタイムトリガーの登録・削除管理 |
+| `19_DistributeCaller.配布呼び出し.gs` | Web App (Webhook) を経由した配布側呼び出しとリトライ |
 | `トリガー設定.gs` | 時間ベーストリガーの登録・削除 |
 | `99_Tests.テスト.gs` | 動作確認・診断ツール |
 
@@ -169,6 +174,14 @@ GAS エディタの「プロジェクトの設定」→「スクリプトプロ�
 | `LOG_LEVEL` | `1`（MINIMAL）/ `2`（SUMMARY）/ `3`（DETAILED） |
 | `TEST_SPREADSHEET_ID` | テスト用スプレッドシートの ID |
 
+### 配布側（DistributeInventory）連携設定
+
+| キー | 値の例 | 説明 |
+|------|-------|------|
+| `RECEIVER_WEBAPP_URL` | `https://script.google.com/.../exec` | 配布側プロジェクトの Web App デプロイ URL |
+| `API_SHARED_TOKEN` | `任意のランダム文字列` | 配布側と共通で設定する認証用の共有トークン |
+| `DISTRIBUTE_TRIGGER_DELAY_MS` | `30000` | トリガー登録から発火までの遅延時間（ミリ秒、未設定時は30秒） |
+
 ---
 
 ## トリガー構成
@@ -230,3 +243,5 @@ GAS エディタの「プロジェクトの設定」→「スクリプトプロ�
 | `testGetChangedInventorySince()` | 差分取得動作確認 |
 | `testLastExecutedAtFlow()` | 実行日時の保存・読み出し確認 |
 | `testPhase5_IntegrationTest()` | 商品マスタ全件取得の統合テスト |
+| `testCallDistributeInventory()` | 受信側 Web App の単体呼び出し検証 |
+| `testDistributeTriggerEndToEnd()` | 動的トリガー作成・発火・自己削除 of E2E 動作検証 |
