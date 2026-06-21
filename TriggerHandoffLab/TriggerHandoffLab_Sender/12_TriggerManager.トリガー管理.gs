@@ -16,27 +16,31 @@
  */
 
 /**
- * 指定した関数を、指定ミリ秒後に1回だけ実行するトリガーを作成する
+ * 指定した関数を、指定ミリ秒後に1回だけ実行するトリガーを作成する（重複防止版）
  *
  * 【処理フロー】
- * 1. 同名関数に紐づく既存のペンディングトリガーIDがプロパティに残っていないか確認する
- *    （残っている場合は、何らかの理由で前回削除されなかった可能性があるためログに警告を出す）
- * 2. ScriptApp.newTrigger().timeBased().after(delayMs).create() でトリガーを作成する
- * 3. 作成したトリガーのユニークIDをスクリプトプロパティ「PENDING_TRIGGER_ID」に保存する
+ * 1. 指定関数名に紐づく既存のトリガーをすべて削除する（重複登録防止）
+ * 2. スクリプトプロパティ PENDING_TRIGGER_ID が残っていればクリアする
+ * 3. ScriptApp.newTrigger().timeBased().after(delayMs).create() でトリガーを作成する
+ * 4. 作成したトリガーのユニークIDをスクリプトプロパティへ保存する
  *
- * @param {string} functionName - トリガーで実行する関数名（このプロジェクト内の関数）
+ * @param {string} functionName - トリガーで実行する関数名
  * @param {number} delayMs - 何ミリ秒後に実行するか
  * @return {string} 作成したトリガーのユニークID
  * @throws {Error} トリガー作成に失敗した場合
  */
 function scheduleOneTimeTrigger(functionName, delayMs) {
-    const properties = PropertiesService.getScriptProperties();
-    const existingId = properties.getProperty('PENDING_TRIGGER_ID');
+    // 同名関数に紐づく既存トリガーを先に削除（重複防止）
+    const existingTriggers = ScriptApp.getProjectTriggers()
+        .filter(t => t.getHandlerFunction() === functionName);
 
-    if (existingId) {
-        console.warn('警告: 前回のペンディングトリガーID(' + existingId + ')が残っています。'
-            + '前回の発火処理で自己削除に失敗した可能性があります。');
+    if (existingTriggers.length > 0) {
+        console.warn(functionName + ' に紐づく既存トリガーが ' + existingTriggers.length
+            + ' 件見つかりました。重複防止のため削除します。');
+        existingTriggers.forEach(t => ScriptApp.deleteTrigger(t));
     }
+
+    PropertiesService.getScriptProperties().deleteProperty('PENDING_TRIGGER_ID');
 
     try {
         const trigger = ScriptApp.newTrigger(functionName)
@@ -45,7 +49,7 @@ function scheduleOneTimeTrigger(functionName, delayMs) {
             .create();
 
         const triggerId = trigger.getUniqueId();
-        properties.setProperty('PENDING_TRIGGER_ID', triggerId);
+        PropertiesService.getScriptProperties().setProperty('PENDING_TRIGGER_ID', triggerId);
 
         console.log('動的トリガーを作成しました: 関数=' + functionName
             + ', 発火予定=' + delayMs + 'ms後, トリガーID=' + triggerId);
