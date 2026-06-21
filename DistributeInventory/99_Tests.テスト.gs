@@ -763,14 +763,24 @@ function testWebhookReceiver() {
 }
 
 /**
- * スクリプトプロパティに保存されている「最終受信内容」をログに出力するデバッグ関数
- *
- * @return {void}
+ * 最後にWebhookで受信したデータをスクリプトプロパティから読み出してログ出力する
  */
 function printLastReceived() {
-  console.log('=== printLastReceived 開始 ===');
-  const props = PropertiesService.getScriptProperties().getProperties();
-  console.log('最終受信時刻 (LAST_RECEIVED_AT): ' + (props.LAST_RECEIVED_AT || '未受信'));
-  console.log('最終受信内容 (LAST_RECEIVED_BODY): ' + (props.LAST_RECEIVED_BODY || '未受信'));
-  console.log('=== printLastReceived 終了 ===');
+  const data = PropertiesService.getScriptProperties().getProperty('LAST_RECEIVED_DATA');
+  if (data) {
+    console.log('--- 最後に受信したデータ ---');
+    console.log(data);
+
+    // JSONとして展開して個別の値を確認する場合
+    try {
+      const body = JSON.parse(data);
+      console.log('送信元 (source): ' + body.source);
+      console.log('発火日時 (firedAt): ' + body.firedAt);
+      console.log('トークン (token): ' + body.token);
+    } catch (e) {
+      console.error('JSONパースエラー: ' + e.message);
+    }
+  } else {
+    console.log('受信データ (LAST_RECEIVED_DATA) はまだ保存されていません。');
+  }
 }
