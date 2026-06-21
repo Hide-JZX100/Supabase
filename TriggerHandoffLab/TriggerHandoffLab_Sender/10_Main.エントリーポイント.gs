@@ -1,18 +1,16 @@
 /**
  * @file 10_Main.エントリーポイント.gs
  * @description TriggerHandoffLab_Sender のメインオーケストレーションモジュール。
- * Phase2時点では「ダミー処理の実行 → 動的トリガーの設定 → 発火確認」のみを行い、
- * 受信側への外部呼び出しはまだ実装しない（Phase3で追加する）。
  *
  * ### 処理フロー (runMainProcess)
  * 1. ダミー処理を実行（Utilities.sleepで疑似的な処理時間を再現）
  * 2. 完了後、12_TriggerManager.gs の scheduleOneTimeTrigger() でワンタイムトリガーを設定
  *
  * ### 処理フロー (onDelayedTrigger) ※トリガーから呼ばれる関数
- * 1. cleanupFiredTrigger() で自分自身のトリガーを削除（後始末）
- * 2. ログ出力のみ（Phase3でここに外部呼び出しを追加する）
+ * 1. try-finally を用いて、送信の成否に関わらず必ず cleanupFiredTrigger() で自己トリガーを削除
+ * 2. callReceiverWebAppWithRetry() で受信側へ通信する（リトライ付き）
  *
- * @version 1.0 (Phase2: 自己完結版)
+ * @version 1.1 (Phase 4: 信頼性向上版)
  */
 
 /**
@@ -42,11 +40,11 @@ function runMainProcess() {
 }
 
 /**
- * 動的トリガーから呼び出される関数（Phase3版）
+ * 動的トリガーから呼び出される関数（Phase4版）
  *
  * 【処理フロー】
- * 1. cleanupFiredTrigger() を呼び出し、自分自身のトリガーを削除する
- * 2. 受信側Web Appへ payload を送信する
+ * 1. 受信側Web Appへ payload を送信する（リトライ付き）
+ * 2. finallyブロックで必ず cleanupFiredTrigger() を呼び出し、自分自身のトリガーを削除する
  *
  * @return {void}
  */
@@ -54,21 +52,21 @@ function onDelayedTrigger() {
     console.log('=== onDelayedTrigger 発火 ===');
     console.log('発火時刻: ' + Utilities.formatDate(new Date(), 'JST', 'yyyy/MM/dd HH:mm:ss'));
 
-    // 自己削除（後始末）
-    cleanupFiredTrigger();
-
-    // 受信側Web Appへ送信
     try {
         const payload = {
             source: 'TriggerHandoffLab_Sender',
             firedAt: new Date().toISOString(),
-            message: '動的トリガー経由での送信テスト'
+            message: '動的トリガー経由での送信テスト（リトライ対応版）'
         };
 
-        callReceiverWebApp(payload);
+        callReceiverWebAppWithRetry(payload);
 
     } catch (error) {
-        console.error('受信側への送信に失敗しました: ' + error.message);
-        // Phase4でリトライ処理を追加する
+        console.error('受信側への送信に失敗しました（リトライ含め全て失敗）: ' + error.message);
+        // 本番適用時はここでメール通知等を検討する
+
+    } finally {
+        // 送信の成否に関わらず、必ず自分自身のトリガーを削除する
+        cleanupFiredTrigger();
     }
 }
