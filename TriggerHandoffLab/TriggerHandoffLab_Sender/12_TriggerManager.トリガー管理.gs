@@ -93,3 +93,15 @@ function cleanupFiredTrigger() {
     return deleted;
 }
 
+/**
+ * 指定した関数名に紐づくトリガーの件数を取得する（デバッグ・テスト用）
+ *
+ * トリガーが正しく1件だけ作成・削除されているかを確認する目的で使用する。
+ *
+ * @param {string} functionName - 確認対象の関数名
+ * @return {number} 該当関数に紐づくトリガーの件数
+ */
+function countTriggersFor(functionName) {
+    const triggers = ScriptApp.getProjectTriggers();
+    return triggers.filter(t => t.getHandlerFunction() === functionName).length;
+}
