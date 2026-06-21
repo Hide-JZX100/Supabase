@@ -1,4 +1,21 @@
 /**
+ * @file 10_Main.エントリーポイント.gs
+ * @description TriggerHandoffLab_Sender のメインオーケストレーションモジュール。
+ * Phase2時点では「ダミー処理の実行 → 動的トリガーの設定 → 発火確認」のみを行い、
+ * 受信側への外部呼び出しはまだ実装しない（Phase3で追加する）。
+ *
+ * ### 処理フロー (runMainProcess)
+ * 1. ダミー処理を実行（Utilities.sleepで疑似的な処理時間を再現）
+ * 2. 完了後、12_TriggerManager.gs の scheduleOneTimeTrigger() でワンタイムトリガーを設定
+ *
+ * ### 処理フロー (onDelayedTrigger) ※トリガーから呼ばれる関数
+ * 1. cleanupFiredTrigger() で自分自身のトリガーを削除（後始末）
+ * 2. ログ出力のみ（Phase3でここに外部呼び出しを追加する）
+ *
+ * @version 1.0 (Phase2: 自己完結版)
+ */
+
+/**
  * メイン処理（ダミー）。本番の updateInventoryDataFromGoodsMaster() 等に相当する。
  *
  * 【処理フロー】
