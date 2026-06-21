@@ -691,3 +691,75 @@ function testIsActiveFiltering() {
   console.log('\n=== テスト11 完了 ===');
 }
 
+/**
+ * 【テスト12】Webhook受信のトークン認証テスト（エラー・正常系）
+ *
+ * doPost(e) の挙動を手動（モック）イベントで検証します。
+ * スクリプトプロパティ「API_SHARED_TOKEN」が設定されている必要があります。
+ * ※一時的にダミートークンを設定して検証します。
+ */
+function testWebhookReceiver() {
+  console.log('=== テスト12: Webhook受信 (doPost) 認証検証 ===\n');
+
+  const properties = PropertiesService.getScriptProperties();
+  const originalToken = properties.getProperty('API_SHARED_TOKEN');
+  
+  // テスト用トークンを設定
+  const testToken = 'test_shared_token_12345';
+  properties.setProperty('API_SHARED_TOKEN', testToken);
+
+  try {
+    // 1. 認証失敗テスト (トークン不一致)
+    console.log('--- 1. 認証失敗テスト (不正なトークン) ---');
+    const mockEventFail = {
+      postData: {
+        contents: JSON.stringify({
+          source: 'TestSender',
+          token: 'invalid_token'
+        })
+      }
+    };
+    const responseFail = doPost(mockEventFail);
+    const resultFail = JSON.parse(responseFail.getContentText());
+    console.log('レスポンス: ' + responseFail.getContentText());
+    if (resultFail.result === 'unauthorized') {
+      console.log('✓ 期待通り認証エラーとなりました。');
+    } else {
+      console.error('❌ エラー: 認証エラーが返されませんでした。');
+    }
+
+    // 2. 正常系テスト (正しいトークン)
+    // ※ 実際に distributeInventoryChanges() が実行されるため、Supabaseやスプレッドシートの接続が稼働している必要があります。
+    console.log('\n--- 2. 正常系テスト (正しいトークン) ---');
+    const mockEventSuccess = {
+      postData: {
+        contents: JSON.stringify({
+          source: 'TestSender',
+          token: testToken
+        })
+      }
+    };
+    const responseSuccess = doPost(mockEventSuccess);
+    const resultSuccess = JSON.parse(responseSuccess.getContentText());
+    console.log('レスポンス: ' + responseSuccess.getContentText());
+    if (resultSuccess.result === 'success') {
+      console.log('✓ 期待通り正常終了しました。');
+    } else {
+      console.error('❌ エラー: 正常終了しませんでした。内容: ' + JSON.stringify(resultSuccess));
+    }
+
+  } catch (error) {
+    console.error('❌ エラー: ' + error.message);
+  } finally {
+    // スクリプトプロパティを元に戻す
+    if (originalToken) {
+      properties.setProperty('API_SHARED_TOKEN', originalToken);
+    } else {
+      properties.deleteProperty('API_SHARED_TOKEN');
+    }
+  }
+
+  console.log('\n=== テスト12 完了 ===');
+}
+
+
