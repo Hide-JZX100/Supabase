@@ -28,6 +28,10 @@
 function doPost(e) {
   const receivedAt = new Date();
 
+  // doPost(e) の try ブロック内の先頭付近に追記
+  const contents = e.postData && e.postData.contents ? e.postData.contents : '{}';
+  PropertiesService.getScriptProperties().setProperty('LAST_RECEIVED_DATA', contents);
+
   try {
     const body = e.postData && e.postData.contents ? JSON.parse(e.postData.contents) : {};
 
