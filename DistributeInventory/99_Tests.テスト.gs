@@ -266,11 +266,11 @@ function testLastExecutedAt() {
     // 1. 未設定状態（フォールバック）のテスト
     console.log('1. 一時的にプロパティを削除してフォールバックを確認します...');
     properties.deleteProperty('SUPABASE_LAST_EXECUTED_AT');
-    
+
     const fallbackTime = loadLastExecutedAt(2); // 2時間前
     const now = Date.now();
     const expectedTime = now - 2 * 60 * 60 * 1000;
-    
+
     // 誤差5秒以内であればOKとする
     const diff = Math.abs(fallbackTime.getTime() - expectedTime);
     if (diff < 5000) {
@@ -397,7 +397,7 @@ function testUpdateInventoryRows() {
     // テスト用のダミー差分データ（2件）を作成
     // 1件目は既存の商品コード（もしシートにデータがあればそれを上書き）、2件目は新規追加用の商品コード
     let existingGoodsCode = 'TEST-EXISTING-001';
-    
+
     // シートにデータがあれば、実際の1件目の商品コードを取得して上書きテストに使用
     const map = buildRowIndexMap(sheet);
     if (map.size > 0) {
@@ -436,7 +436,7 @@ function testUpdateInventoryRows() {
     // === アサーション（書き込み整合性検証） ===
     console.log('\n書き込み結果のアサーション（整合性検証）を実行します...');
     const assertMap = buildRowIndexMap(sheet);
-    
+
     // 1. 既存行の上書き検証
     const existingRowNo = assertMap.get(existingGoodsCode);
     if (existingRowNo) {
@@ -514,10 +514,10 @@ function testInitializeSheet() {
 
     console.log('初期化処理を実行します...');
     initializeInventorySheet(sheet, dummyAllData);
-    
+
     console.log('\n✓ 初期化完了後の検証:');
     console.log('  現在の最終行: ' + sheet.getLastRow() + ' 行 (期待値: 4 行)');
-    
+
     const writtenHeaders = sheet.getRange(1, 1, 1, TOTAL_COLUMNS).getValues()[0];
     console.log('  ヘッダーチェック (A列): ' + (writtenHeaders[0] === '商品コード' ? '✓ OK' : '❌ NG ("' + writtenHeaders[0] + '")'));
     console.log('  ヘッダーチェック (M列): ' + (writtenHeaders[TOTAL_COLUMNS - 1] === '更新日時' ? '✓ OK' : '❌ NG ("' + writtenHeaders[TOTAL_COLUMNS - 1] + '")'));
@@ -614,12 +614,12 @@ function testSendErrorMail() {
 
     const subject = '【テスト】在庫配布処理 エラーメール送信テスト';
     const body = 'このメールは DistributeInventory プロジェクトの testSendErrorMail() 関数から送信されたテストメールです。\n\n' +
-                 '■ 送信日時: ' + new Date().toLocaleString() + '\n' +
-                 '■ ステータス: 正常動作中\n\n' +
-                 'このメールを受信できた場合、エラー発生時の通知連携設定は正常に機能しています。';
+      '■ 送信日時: ' + new Date().toLocaleString() + '\n' +
+      '■ ステータス: 正常動作中\n\n' +
+      'このメールを受信できた場合、エラー発生時の通知連携設定は正常に機能しています。';
 
     sendErrorMail(subject, body);
-    
+
     console.log('\n✓ テストメール送信処理が完了しました。');
     console.log('  受信トレイを確認し、実際にメールが届いていることをご確認ください。');
 
@@ -647,7 +647,7 @@ function testIsActiveFiltering() {
     // 基準日時として十分に古い過去の日時（1970年1月1日）を指定し、Supabase の全件を取得
     const epoch = new Date('1970-01-01T00:00:00Z');
     console.log('1970-01-01 以降の全データを取得してフィルタリング状態を検証します...');
-    
+
     const data = getChangedInventorySince(epoch);
     console.log('✓ データ取得成功！ 件数: ' + data.length + '件\n');
 
@@ -703,7 +703,7 @@ function testWebhookReceiver() {
 
   const properties = PropertiesService.getScriptProperties();
   const originalToken = properties.getProperty('API_SHARED_TOKEN');
-  
+
   // テスト用トークンを設定
   const testToken = 'test_shared_token_12345';
   properties.setProperty('API_SHARED_TOKEN', testToken);
@@ -762,4 +762,15 @@ function testWebhookReceiver() {
   console.log('\n=== テスト12 完了 ===');
 }
 
-
+/**
+ * スクリプトプロパティに保存されている「最終受信内容」をログに出力するデバッグ関数
+ *
+ * @return {void}
+ */
+function printLastReceived() {
+  console.log('=== printLastReceived 開始 ===');
+  const props = PropertiesService.getScriptProperties().getProperties();
+  console.log('最終受信時刻 (LAST_RECEIVED_AT): ' + (props.LAST_RECEIVED_AT || '未受信'));
+  console.log('最終受信内容 (LAST_RECEIVED_BODY): ' + (props.LAST_RECEIVED_BODY || '未受信'));
+  console.log('=== printLastReceived 終了 ===');
+}
