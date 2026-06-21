@@ -20,6 +20,7 @@
  * Step 5. シート全件書き直し           (15_SpreadsheetRepository.gs)
  * Step 5b. Supabaseへの全件書き込み    (17_SupabaseRepository.gs)
  * Step 6. 実行タイムスタンプ記録       (15_SpreadsheetRepository.gs)
+ * Step 6b. 動的トリガーでDistributeInventoryを呼び出す (18_TriggerManager.gs / 19_DistributeCaller.gs)
  *
  * ### 処理フロー (updateInventoryDataBatchWithRetry)
  * 1. リトライ統計リセット (12_Logger.gs)
@@ -29,6 +30,7 @@
  * 5. エラーログをシートに記録 (15_SpreadsheetRepository.gs)
  * 6. リトライ統計を表示・記録 (12_Logger.gs / 15_SpreadsheetRepository.gs)
  * 7. 実行タイムスタンプを記録 (15_SpreadsheetRepository.gs)
+ * 8. 動的トリガーでDistributeInventoryを呼び出す (18_TriggerManager.gs / 19_DistributeCaller.gs)
  *
  * ### トリガー設定
  * - トリガー設定スクリプト.gsの setTrigger() で時間ベーストリガーを管理
@@ -263,6 +265,9 @@ function updateInventoryDataBatchWithRetry() {
 
         recordExecutionTimestamp();
 
+        // 動的トリガーでDistributeInventoryの配布処理を呼び出す（Phase A）
+        scheduleOneTimeTrigger('callDistributeInventory', getDistributeTriggerDelayMs());
+
     } catch (error) {
         logError('一括更新エラー:', error.message);
         throw error;
@@ -388,6 +393,9 @@ function updateInventoryDataFromGoodsMaster() {
 
         // Step 6: 実行タイムスタンプ記録
         recordExecutionTimestamp();
+
+        // Step 6b: 動的トリガーでDistributeInventoryの配布処理を呼び出す（Phase A）
+        scheduleOneTimeTrigger('callDistributeInventory', getDistributeTriggerDelayMs());
 
         // Step 7: 翌日分のトリガーを自動登録（自己スケジューリング）
         setTriggerForGoodsMaster();
