@@ -1286,3 +1286,58 @@ function testLastExecutedAtFlow() {
         }
     }
 }
+
+/**
+ * callDistributeInventory() の単体動作確認テスト
+ *
+ * 【テスト手順】
+ * 1. callDistributeInventory() を直接呼び出す（トリガー経由ではなく手動実行）
+ * 2. DistributeInventory側へHTTPリクエストが届き、成功ログが出ることを確認する
+ * 3. cleanupFiredTrigger() が呼ばれるため、事前にダミーのPENDING_TRIGGER_IDが
+ *    設定されていなくても警告ログのみで正常終了することを確認する
+ *
+ * @return {void}
+ */
+function testCallDistributeInventory() {
+    console.log('=== testCallDistributeInventory 開始 ===');
+
+    try {
+        callDistributeInventory();
+        console.log('✓ callDistributeInventory() がエラーなく完了しました。');
+        console.log('DistributeInventory側の実行ログで Webhook受信 が記録されているか確認してください。');
+    } catch (error) {
+        console.error('❌ テスト中に予期しない例外が発生しました: ' + error.message);
+    }
+
+    console.log('=== testCallDistributeInventory 終了 ===');
+}
+
+/**
+ * 在庫差分更新フロー全体（トリガー登録部分）の動作確認テスト
+ *
+ * 【テスト手順】
+ * 1. scheduleOneTimeTrigger('callDistributeInventory', 10000) を直接呼び出す
+ *    （本番の getDistributeTriggerDelayMs() より短い10秒に設定し、確認を速くする）
+ * 2. countTriggersFor('callDistributeInventory') が 1 であることを確認する
+ * 3. 10秒待ってトリガーが自動発火し、DistributeInventory側にリクエストが届くことを確認する
+ * 4. 発火後, トリガーが自動的に削除されていることを確認する
+ *
+ * @return {void}
+ */
+function testDistributeTriggerEndToEnd() {
+    console.log('=== testDistributeTriggerEndToEnd 開始 ===');
+
+    scheduleOneTimeTrigger('callDistributeInventory', 10000);
+
+    const count = countTriggersFor('callDistributeInventory');
+    console.log('トリガー設定後の件数: ' + count + ' (期待値: 1)');
+
+    if (count === 1) {
+        console.log('✓ トリガー設定確認: 成功');
+        console.log('約10秒後に callDistributeInventory が自動実行されます。実行ログとトリガー一覧を確認してください。');
+    } else {
+        console.error('❌ トリガー設定確認: 失敗');
+    }
+
+    console.log('=== testDistributeTriggerEndToEnd 終了 ===');
+}
