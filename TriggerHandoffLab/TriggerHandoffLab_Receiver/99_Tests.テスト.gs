@@ -87,3 +87,17 @@ function testDoGet() {
 
     console.log('=== testDoGet 終了 ===');
 }
+
+/**
+ * スクリプトプロパティに保存されている「最終受信内容」をログに出力するデバッグ関数
+ *
+ * @return {void}
+ */
+function printLastReceived() {
+    console.log('=== printLastReceived 開始 ===');
+    const props = PropertiesService.getScriptProperties().getProperties();
+    console.log('最終受信時刻 (LAST_RECEIVED_AT): ' + (props.LAST_RECEIVED_AT || '未受信'));
+    console.log('最終受信内容 (LAST_RECEIVED_BODY): ' + (props.LAST_RECEIVED_BODY || '未受信'));
+    console.log('=== printLastReceived 終了 ===');
+}
+
