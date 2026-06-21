@@ -42,11 +42,11 @@ function runMainProcess() {
 }
 
 /**
- * 動的トリガーから呼び出される関数（Phase2時点）
+ * 動的トリガーから呼び出される関数（Phase3版）
  *
  * 【処理フロー】
  * 1. cleanupFiredTrigger() を呼び出し、自分自身のトリガーを削除する
- * 2. 発火確認のログを出力する（Phase3で受信側への送信処理に拡張する）
+ * 2. 受信側Web Appへ payload を送信する
  *
  * @return {void}
  */
@@ -57,5 +57,18 @@ function onDelayedTrigger() {
     // 自己削除（後始末）
     cleanupFiredTrigger();
 
-    console.log('Phase2: ここでは発火確認のみ。Phase3で受信側への送信処理を追加します。');
+    // 受信側Web Appへ送信
+    try {
+        const payload = {
+            source: 'TriggerHandoffLab_Sender',
+            firedAt: new Date().toISOString(),
+            message: '動的トリガー経由での送信テスト'
+        };
+
+        callReceiverWebApp(payload);
+
+    } catch (error) {
+        console.error('受信側への送信に失敗しました: ' + error.message);
+        // Phase4でリトライ処理を追加する
+    }
 }
