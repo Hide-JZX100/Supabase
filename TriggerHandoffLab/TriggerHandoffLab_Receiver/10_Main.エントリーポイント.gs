@@ -45,3 +45,18 @@ function doPost(e) {
             .setMimeType(ContentService.MimeType.JSON);
     }
 }
+
+/**
+ * ブラウザから直接URLを開いた場合の簡易動作確認用（GETリクエスト）
+ *
+ * @param {Object} e - GASのイベントオブジェクト
+ * @return {GoogleAppsScript.Content.TextOutput} 簡易な生存確認メッセージ
+ */
+function doGet(e) {
+    return ContentService
+        .createTextOutput(JSON.stringify({
+            result: 'success',
+            message: 'TriggerHandoffLab_Receiver は正常に稼働しています。POSTリクエストで受信処理が行われます。'
+        }))
+        .setMimeType(ContentService.MimeType.JSON);
+}
