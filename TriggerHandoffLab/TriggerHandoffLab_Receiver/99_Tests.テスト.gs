@@ -1,4 +1,12 @@
 /**
+ * @file 99_Tests.テスト.gs
+ * @description TriggerHandoffLab_Receiver の動作テストスクリプト。
+ * doPost(e) や doGet(e) が正しく動作するかをシミュレートし検証します。
+ *
+ * @version 1.0
+ */
+
+/**
  * doPost(e) の動作確認を行うテスト関数
  *
  * 【テスト手順】
