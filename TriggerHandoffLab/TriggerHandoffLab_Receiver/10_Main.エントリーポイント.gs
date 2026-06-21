@@ -1,4 +1,17 @@
 /**
+ * @file 10_Main.エントリーポイント.gs
+ * @description TriggerHandoffLab_Receiver のメインモジュール。
+ * 送信側（Sender）からのHTTP POSTリクエストを受信し、内容をログに記録する。
+ * 本番の DistributeInventory における distributeInventoryChanges() 呼び出しの
+ * 受け口に相当する役割を学習目的で模倣する。
+ *
+ * ### 依存関係
+ * - 参照先: 11_Config.設定管理.gs
+ *
+ * @version 1.0
+ */
+
+/**
  * Web App として公開した際のPOSTリクエスト受信処理
  *
  * 【処理フロー】
