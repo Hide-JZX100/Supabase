@@ -88,3 +88,40 @@ function testRunMainProcessAndAutoTrigger() {
 
     console.log('=== testRunMainProcessAndAutoTrigger 終了 ===');
 }
+
+/**
+ * 送信側から受信側へのHTTP接続テスト
+ *
+ * 【テスト手順】
+ * 1. スクリプトプロパティ RECEIVER_WEBAPP_URL が設定されていることを前提とします。
+ * 2. 任意のペイロードを作成して callReceiverWebApp() を呼び出します。
+ * 3. 正常に応答（ステータス200）が戻ってくることを確認します。
+ *
+ * @return {void}
+ */
+function testHttpCommunication() {
+    console.log('=== testHttpCommunication 開始 ===');
+
+    try {
+        const payload = {
+            source: 'testHttpCommunication',
+            firedAt: new Date().toISOString(),
+            message: '手動テスト実行による接続疎通確認'
+        };
+
+        const response = callReceiverWebApp(payload);
+        
+        if (response.success && response.statusCode === 200) {
+            console.log('✓ HTTP通信テスト: 成功');
+            console.log('応答ボディ: ' + response.body);
+        } else {
+            console.error('❌ HTTP通信テスト: 失敗 (ステータスコード=' + response.statusCode + ')');
+        }
+
+    } catch (error) {
+        console.error('❌ HTTP通信テスト: エラー発生 - ' + error.message);
+    }
+
+    console.log('=== testHttpCommunication 終了 ===');
+}
+
