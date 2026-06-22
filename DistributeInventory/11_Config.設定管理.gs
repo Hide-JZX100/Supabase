@@ -161,3 +161,19 @@ function getSheetConfigs() {
 
   return configs;
 }
+
+/**
+ * 送信側(GetInventoryData)と共有する認証トークンを取得する
+ *
+ * 動的トリガー経由のWebhook受信時に、リクエストの正当性を検証するために使用する。
+ *
+ * @return {string} 共有トークン
+ * @throws {Error} API_SHARED_TOKEN が未設定の場合
+ */
+function getSharedToken() {
+  const token = PropertiesService.getScriptProperties().getProperty('API_SHARED_TOKEN');
+  if (!token) {
+    throw new Error('スクリプトプロパティ API_SHARED_TOKEN が設定されていません。送信側(GetInventoryData)と同じ値を設定してください。');
+  }
+  return token;
+}

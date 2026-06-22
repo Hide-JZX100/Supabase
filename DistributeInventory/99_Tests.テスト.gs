@@ -266,11 +266,11 @@ function testLastExecutedAt() {
     // 1. 未設定状態（フォールバック）のテスト
     console.log('1. 一時的にプロパティを削除してフォールバックを確認します...');
     properties.deleteProperty('SUPABASE_LAST_EXECUTED_AT');
-    
+
     const fallbackTime = loadLastExecutedAt(2); // 2時間前
     const now = Date.now();
     const expectedTime = now - 2 * 60 * 60 * 1000;
-    
+
     // 誤差5秒以内であればOKとする
     const diff = Math.abs(fallbackTime.getTime() - expectedTime);
     if (diff < 5000) {
@@ -397,7 +397,7 @@ function testUpdateInventoryRows() {
     // テスト用のダミー差分データ（2件）を作成
     // 1件目は既存の商品コード（もしシートにデータがあればそれを上書き）、2件目は新規追加用の商品コード
     let existingGoodsCode = 'TEST-EXISTING-001';
-    
+
     // シートにデータがあれば、実際の1件目の商品コードを取得して上書きテストに使用
     const map = buildRowIndexMap(sheet);
     if (map.size > 0) {
@@ -436,7 +436,7 @@ function testUpdateInventoryRows() {
     // === アサーション（書き込み整合性検証） ===
     console.log('\n書き込み結果のアサーション（整合性検証）を実行します...');
     const assertMap = buildRowIndexMap(sheet);
-    
+
     // 1. 既存行の上書き検証
     const existingRowNo = assertMap.get(existingGoodsCode);
     if (existingRowNo) {
@@ -514,10 +514,10 @@ function testInitializeSheet() {
 
     console.log('初期化処理を実行します...');
     initializeInventorySheet(sheet, dummyAllData);
-    
+
     console.log('\n✓ 初期化完了後の検証:');
     console.log('  現在の最終行: ' + sheet.getLastRow() + ' 行 (期待値: 4 行)');
-    
+
     const writtenHeaders = sheet.getRange(1, 1, 1, TOTAL_COLUMNS).getValues()[0];
     console.log('  ヘッダーチェック (A列): ' + (writtenHeaders[0] === '商品コード' ? '✓ OK' : '❌ NG ("' + writtenHeaders[0] + '")'));
     console.log('  ヘッダーチェック (M列): ' + (writtenHeaders[TOTAL_COLUMNS - 1] === '更新日時' ? '✓ OK' : '❌ NG ("' + writtenHeaders[TOTAL_COLUMNS - 1] + '")'));
@@ -614,12 +614,12 @@ function testSendErrorMail() {
 
     const subject = '【テスト】在庫配布処理 エラーメール送信テスト';
     const body = 'このメールは DistributeInventory プロジェクトの testSendErrorMail() 関数から送信されたテストメールです。\n\n' +
-                 '■ 送信日時: ' + new Date().toLocaleString() + '\n' +
-                 '■ ステータス: 正常動作中\n\n' +
-                 'このメールを受信できた場合、エラー発生時の通知連携設定は正常に機能しています。';
+      '■ 送信日時: ' + new Date().toLocaleString() + '\n' +
+      '■ ステータス: 正常動作中\n\n' +
+      'このメールを受信できた場合、エラー発生時の通知連携設定は正常に機能しています。';
 
     sendErrorMail(subject, body);
-    
+
     console.log('\n✓ テストメール送信処理が完了しました。');
     console.log('  受信トレイを確認し、実際にメールが届いていることをご確認ください。');
 
@@ -647,7 +647,7 @@ function testIsActiveFiltering() {
     // 基準日時として十分に古い過去の日時（1970年1月1日）を指定し、Supabase の全件を取得
     const epoch = new Date('1970-01-01T00:00:00Z');
     console.log('1970-01-01 以降の全データを取得してフィルタリング状態を検証します...');
-    
+
     const data = getChangedInventorySince(epoch);
     console.log('✓ データ取得成功！ 件数: ' + data.length + '件\n');
 
@@ -691,3 +691,96 @@ function testIsActiveFiltering() {
   console.log('\n=== テスト11 完了 ===');
 }
 
+/**
+ * 【テスト12】Webhook受信のトークン認証テスト（エラー・正常系）
+ *
+ * doPost(e) の挙動を手動（モック）イベントで検証します。
+ * スクリプトプロパティ「API_SHARED_TOKEN」が設定されている必要があります。
+ * ※一時的にダミートークンを設定して検証します。
+ */
+function testWebhookReceiver() {
+  console.log('=== テスト12: Webhook受信 (doPost) 認証検証 ===\n');
+
+  const properties = PropertiesService.getScriptProperties();
+  const originalToken = properties.getProperty('API_SHARED_TOKEN');
+
+  // テスト用トークンを設定
+  const testToken = 'test_shared_token_12345';
+  properties.setProperty('API_SHARED_TOKEN', testToken);
+
+  try {
+    // 1. 認証失敗テスト (トークン不一致)
+    console.log('--- 1. 認証失敗テスト (不正なトークン) ---');
+    const mockEventFail = {
+      postData: {
+        contents: JSON.stringify({
+          source: 'TestSender',
+          token: 'invalid_token'
+        })
+      }
+    };
+    const responseFail = doPost(mockEventFail);
+    const resultFail = JSON.parse(responseFail.getContentText());
+    console.log('レスポンス: ' + responseFail.getContentText());
+    if (resultFail.result === 'unauthorized') {
+      console.log('✓ 期待通り認証エラーとなりました。');
+    } else {
+      console.error('❌ エラー: 認証エラーが返されませんでした。');
+    }
+
+    // 2. 正常系テスト (正しいトークン)
+    // ※ 実際に distributeInventoryChanges() が実行されるため、Supabaseやスプレッドシートの接続が稼働している必要があります。
+    console.log('\n--- 2. 正常系テスト (正しいトークン) ---');
+    const mockEventSuccess = {
+      postData: {
+        contents: JSON.stringify({
+          source: 'TestSender',
+          token: testToken
+        })
+      }
+    };
+    const responseSuccess = doPost(mockEventSuccess);
+    const resultSuccess = JSON.parse(responseSuccess.getContentText());
+    console.log('レスポンス: ' + responseSuccess.getContentText());
+    if (resultSuccess.result === 'success') {
+      console.log('✓ 期待通り正常終了しました。');
+    } else {
+      console.error('❌ エラー: 正常終了しませんでした。内容: ' + JSON.stringify(resultSuccess));
+    }
+
+  } catch (error) {
+    console.error('❌ エラー: ' + error.message);
+  } finally {
+    // スクリプトプロパティを元に戻す
+    if (originalToken) {
+      properties.setProperty('API_SHARED_TOKEN', originalToken);
+    } else {
+      properties.deleteProperty('API_SHARED_TOKEN');
+    }
+  }
+
+  console.log('\n=== テスト12 完了 ===');
+}
+
+/**
+ * 最後にWebhookで受信したデータをスクリプトプロパティから読み出してログ出力する
+ */
+function printLastReceived() {
+  const data = PropertiesService.getScriptProperties().getProperty('LAST_RECEIVED_DATA');
+  if (data) {
+    console.log('--- 最後に受信したデータ ---');
+    console.log(data);
+
+    // JSONとして展開して個別の値を確認する場合
+    try {
+      const body = JSON.parse(data);
+      console.log('送信元 (source): ' + body.source);
+      console.log('発火日時 (firedAt): ' + body.firedAt);
+      console.log('トークン (token): ' + body.token);
+    } catch (e) {
+      console.error('JSONパースエラー: ' + e.message);
+    }
+  } else {
+    console.log('受信データ (LAST_RECEIVED_DATA) はまだ保存されていません。');
+  }
+}

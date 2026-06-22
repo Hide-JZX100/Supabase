@@ -119,3 +119,43 @@ function getStoredTokens() {
 //   SUPABASE_URL : SupabaseプロジェクトURL
 //   SUPABASE_KEY : Supabase anon key（publishable key）
 // ============================================================================
+
+/**
+ * 受信側(DistributeInventory)のWeb App URLをスクリプトプロパティから取得する
+ *
+ * @return {string} 受信側のWeb App URL
+ * @throws {Error} RECEIVER_WEBAPP_URL が未設定の場合
+ */
+function getReceiverWebAppUrl() {
+    const url = PropertiesService.getScriptProperties().getProperty('RECEIVER_WEBAPP_URL');
+    if (!url) {
+        throw new Error('スクリプトプロパティ RECEIVER_WEBAPP_URL が設定されていません。DistributeInventory側のWeb AppデプロイURLを設定してください。');
+    }
+    return url;
+}
+
+/**
+ * 受信側(DistributeInventory)と共有する認証トークンを取得する
+ *
+ * @return {string} 共有トークン
+ * @throws {Error} API_SHARED_TOKEN が未設定の場合
+ */
+function getSharedToken() {
+    const token = PropertiesService.getScriptProperties().getProperty('API_SHARED_TOKEN');
+    if (!token) {
+        throw new Error('スクリプトプロパティ API_SHARED_TOKEN が設定されていません。受信側(DistributeInventory)と同じ値を設定してください。');
+    }
+    return token;
+}
+
+/**
+ * 動的トリガーの発火までの遅延時間（ミリ秒）を取得する
+ *
+ * 未設定の場合は既定値 30000（30秒）を返す。
+ *
+ * @return {number} 遅延時間（ミリ秒）
+ */
+function getDistributeTriggerDelayMs() {
+    const value = PropertiesService.getScriptProperties().getProperty('DISTRIBUTE_TRIGGER_DELAY_MS');
+    return value ? parseInt(value, 10) : 30000;
+}

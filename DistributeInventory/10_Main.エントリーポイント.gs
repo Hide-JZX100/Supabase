@@ -35,6 +35,17 @@
  * @return {void}
  */
 function distributeInventoryChanges() {
+  // 動的トリガー（Webhook経由）と固定時刻トリガーが同時に発火した場合の
+  // 多重実行を防ぐため、排他ロックを取得する。
+  // ロックが取得できない場合は「他の実行が処理中」と判断し、今回は処理をスキップする。
+  const lock = LockService.getScriptLock();
+  const hasLock = lock.tryLock(5000); // 最大5秒待機
+
+  if (!hasLock) {
+    console.warn('他の実行が処理中のため、今回の distributeInventoryChanges() 実行をスキップします（多重起動防止）。');
+    return;
+  }
+
   const startTime = new Date();
   logWithLevel(LOG_LEVEL.MINIMAL, '=== 在庫配布処理（差分更新）開始 ===');
 
@@ -117,6 +128,9 @@ function distributeInventoryChanges() {
       '■ エラー内容:\n' + error.message + '\n\n' +
       '※ Supabase への接続状態やスクリプトプロパティ（SHEET_CONFIG_1 など）の設定値を確認してください。';
     sendErrorMail(subject, body);
+  } finally {
+    // 処理の成否に関わらず、必ずロックを解放する
+    lock.releaseLock();
   }
 }
 
