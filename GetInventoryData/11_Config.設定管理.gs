@@ -151,11 +151,11 @@ function getSharedToken() {
 /**
  * 動的トリガーの発火までの遅延時間（ミリ秒）を取得する
  *
- * 未設定の場合は既定値 30000（30秒）を返す。
+ * 未設定の場合は既定値 100（0.1秒）を返す。
  *
  * @return {number} 遅延時間（ミリ秒）
  */
 function getDistributeTriggerDelayMs() {
     const value = PropertiesService.getScriptProperties().getProperty('DISTRIBUTE_TRIGGER_DELAY_MS');
-    return value ? parseInt(value, 10) : 30000;
+    return value ? parseInt(value, 10) : 100;
 }
