@@ -720,8 +720,8 @@ function testWebhookReceiver() {
       }
     };
     const responseFail = doPost(mockEventFail);
-    const resultFail = JSON.parse(responseFail.getContentText());
-    console.log('レスポンス: ' + responseFail.getContentText());
+    const resultFail = JSON.parse(responseFail.getContent());
+    console.log('レスポンス: ' + responseFail.getContent());
     if (resultFail.result === 'unauthorized') {
       console.log('✓ 期待通り認証エラーとなりました。');
     } else {
@@ -740,8 +740,8 @@ function testWebhookReceiver() {
       }
     };
     const responseSuccess = doPost(mockEventSuccess);
-    const resultSuccess = JSON.parse(responseSuccess.getContentText());
-    console.log('レスポンス: ' + responseSuccess.getContentText());
+    const resultSuccess = JSON.parse(responseSuccess.getContent());
+    console.log('レスポンス: ' + responseSuccess.getContent());
 
     if (resultSuccess.result === 'success') {
       console.log('✓ 期待通り受付成功となりました。');
