@@ -127,3 +127,21 @@ function loadLastExecutedAt(fallbackHours = 2) {
   logWithLevel(LOG_LEVEL.MINIMAL, '最終実行日時が未保存のため ' + fallbackHours + '時間前 を使用: ' + fallbackJst + ' JST (' + fallback.toISOString() + ')');
   return fallback;
 }
+
+/**
+ * タイムゾーン修正後のログ出力テスト関数
+ */
+function test_logTimezoneChange() {
+  console.log("--- タイムゾーンログ表示テスト開始 ---");
+
+  // 1. 保存用テスト
+  const testIso = saveLastExecutedAt();
+
+  // 2. 読み込み用テスト
+  const loadedDate = loadLastExecutedAt();
+
+  // 3. 差分取得開始ログテスト
+  getChangedInventorySince(loadedDate);
+
+  console.log("--- タイムゾーンログ表示テスト終了 ---");
+}
