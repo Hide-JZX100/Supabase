@@ -33,7 +33,8 @@ const SUPABASE_QUERY_LIMIT = 1000;
 function getChangedInventorySince(since) {
   const sinceStr = (since instanceof Date) ? since.toISOString() : since;
 
-  logWithLevel(LOG_LEVEL.MINIMAL, '差分取得開始: ' + sinceStr + ' 以降に更新された商品');
+  const sinceJst = Utilities.formatDate(new Date(sinceStr), 'JST', 'yyyy/MM/dd HH:mm:ss');
+  logWithLevel(LOG_LEVEL.MINIMAL, '差分取得開始: ' + sinceJst + ' JST (' + sinceStr + ') 以降に更新された商品');
 
   const allData = [];
   let offset = 0;
@@ -94,7 +95,8 @@ function saveLastExecutedAt() {
   const isoString = now.toISOString();
   PropertiesService.getScriptProperties()
     .setProperty('SUPABASE_LAST_EXECUTED_AT', isoString);
-  logWithLevel(LOG_LEVEL.MINIMAL, '最終実行日時を保存: ' + isoString);
+  const nowJst = Utilities.formatDate(now, 'JST', 'yyyy/MM/dd HH:mm:ss');
+  logWithLevel(LOG_LEVEL.MINIMAL, '最終実行日時を保存: ' + nowJst + ' JST (' + isoString + ')');
   return isoString;
 }
 
@@ -114,12 +116,32 @@ function loadLastExecutedAt(fallbackHours = 2) {
     .getProperty('SUPABASE_LAST_EXECUTED_AT');
 
   if (saved) {
-    logWithLevel(LOG_LEVEL.MINIMAL, '最終実行日時を読み込み: ' + saved);
+    const savedJst = Utilities.formatDate(new Date(saved), 'JST', 'yyyy/MM/dd HH:mm:ss');
+    logWithLevel(LOG_LEVEL.MINIMAL, '最終実行日時を読み込み: ' + savedJst + ' JST (' + saved + ')');
     return new Date(saved);
   }
 
   // 未保存時はフォールバック
   const fallback = new Date(Date.now() - fallbackHours * 60 * 60 * 1000);
-  logWithLevel(LOG_LEVEL.MINIMAL, '最終実行日時が未保存のため ' + fallbackHours + '時間前 を使用: ' + fallback.toISOString());
+  const fallbackJst = Utilities.formatDate(fallback, 'JST', 'yyyy/MM/dd HH:mm:ss');
+  logWithLevel(LOG_LEVEL.MINIMAL, '最終実行日時が未保存のため ' + fallbackHours + '時間前 を使用: ' + fallbackJst + ' JST (' + fallback.toISOString() + ')');
   return fallback;
+}
+
+/**
+ * タイムゾーン修正後のログ出力テスト関数
+ */
+function test_logTimezoneChange() {
+  console.log("--- タイムゾーンログ表示テスト開始 ---");
+
+  // 1. 保存用テスト
+  const testIso = saveLastExecutedAt();
+
+  // 2. 読み込み用テスト
+  const loadedDate = loadLastExecutedAt();
+
+  // 3. 差分取得開始ログテスト
+  getChangedInventorySince(loadedDate);
+
+  console.log("--- タイムゾーンログ表示テスト終了 ---");
 }
