@@ -43,3 +43,44 @@ function scheduleOneTimeTrigger(functionName, delayMs) {
     throw error;
   }
 }
+
+/**
+ * 発火済みのワンタイムトリガーを自分自身で削除する（後始末処理）
+ *
+ * @return {boolean} トリガーの削除に成功した場合は true、対象が見つからなかった場合は false
+ */
+function cleanupFiredTrigger() {
+  const properties = PropertiesService.getScriptProperties();
+  const triggerId = properties.getProperty('PENDING_TRIGGER_ID');
+
+  if (!triggerId) {
+    console.log('PENDING_TRIGGER_ID が見つからないため、削除処理をスキップします。');
+    return false;
+  }
+
+  let deleted = false;
+
+  try {
+    const triggers = ScriptApp.getProjectTriggers();
+    for (const trigger of triggers) {
+      if (trigger.getUniqueId() === triggerId) {
+        ScriptApp.deleteTrigger(trigger);
+        deleted = true;
+        console.log('発火済みトリガーを削除しました: ID=' + triggerId);
+        break;
+      }
+    }
+
+    if (!deleted) {
+      console.warn('削除対象のトリガー(ID=' + triggerId + ')が見つかりませんでした。既に削除済みの可能性があります。');
+    }
+
+  } catch (error) {
+    console.error('トリガー削除中にエラーが発生しました: ' + error.message);
+
+  } finally {
+    properties.deleteProperty('PENDING_TRIGGER_ID');
+  }
+
+  return deleted;
+}
