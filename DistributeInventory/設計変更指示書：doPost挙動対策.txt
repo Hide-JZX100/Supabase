@@ -1,0 +1,298 @@
+全体の変更内容
+ファイル	区分
+18_TriggerManager.トリガー管理.gs	新規（GetInventoryData側からそのまま移植）
+11_Config.設定管理.gs	追記：getReceiverTriggerDelayMs()
+16_WebhookReceiver.受信処理.gs	修正：doPost のトリガー作成方式への変更、triggeredDistributeInventory() 新規追加
+99_Tests.テスト.gs	修正：testWebhookReceiver() の正常系アサーションを更新
+
+新規プロパティ：RECEIVER_TRIGGER_DELAY_MS（未設定時は既定値100msで動作するため、設定は任意です）
+
+① 新規ファイル：18_TriggerManager.トリガー管理.gs
+GetInventoryData側のものと完全に同一の内容です（ロジック変更なし、そのまま移植）。
+
+/**
+ * @file 18_TriggerManager.トリガー管理.gs
+ * @description 動的ワンタイムトリガーの作成・削除・自己クリーンアップを担う汎用モジュール。
+ * 「指定時間後に1回だけ実行し、実行後は自分自身を削除する」という挙動を
+ * 安全に扱うための関数群を提供する。
+ * GetInventoryData（送信側）で検証済みのロジックを移植したもの。
+ *
+ * ### 設計方針
+ * - トリガー作成時にユニークIDをスクリプトプロパティへ保存する
+ * - トリガー発火後の関数は、必ず本ファイルの cleanupFiredTrigger() を呼び出して自己削除する
+ * - 同じ関数に対するトリガーが重複して残らないよう、作成前に既存トリガーを削除する
+ *
+ * @version 1.0
+ * @see scheduleOneTimeTrigger - 指定ミリ秒後に1回だけ発火するトリガーを作成（重複防止付き）
+ * @see cleanupFiredTrigger    - 発火済みトリガーを自分自身で削除する
+ * @see countTriggersFor       - 指定関数に紐づくトリガー数を確認する（デバッグ用）
+ */
+
+/**
+ * 指定した関数を、指定ミリ秒後に1回だけ実行するトリガーを作成する（重複防止版）
+ *
+ * 【処理フロー】
+ * 1. 指定関数名に紐づく既存のトリガーをすべて削除する（重複登録防止）
+ * 2. スクリプトプロパティ PENDING_TRIGGER_ID が残っていればクリアする
+ * 3. ScriptApp.newTrigger().timeBased().after(delayMs).create() でトリガーを作成する
+ * 4. 作成したトリガーのユニークIDをスクリプトプロパティへ保存する
+ *
+ * @param {string} functionName - トリガーで実行する関数名
+ * @param {number} delayMs - 何ミリ秒後に実行するか
+ * @return {string} 作成したトリガーのユニークID
+ * @throws {Error} トリガー作成に失敗した場合
+ */
+function scheduleOneTimeTrigger(functionName, delayMs) {
+    const existingTriggers = ScriptApp.getProjectTriggers()
+        .filter(t => t.getHandlerFunction() === functionName);
+
+    if (existingTriggers.length > 0) {
+        console.warn(functionName + ' に紐づく既存トリガーが ' + existingTriggers.length
+            + ' 件見つかりました。重複防止のため削除します。');
+        existingTriggers.forEach(t => ScriptApp.deleteTrigger(t));
+    }
+
+    PropertiesService.getScriptProperties().deleteProperty('PENDING_TRIGGER_ID');
+
+    try {
+        const trigger = ScriptApp.newTrigger(functionName)
+            .timeBased()
+            .after(delayMs)
+            .create();
+
+        const triggerId = trigger.getUniqueId();
+        PropertiesService.getScriptProperties().setProperty('PENDING_TRIGGER_ID', triggerId);
+
+        console.log('動的トリガーを作成しました: 関数=' + functionName
+            + ', 発火予定=' + delayMs + 'ms後, トリガーID=' + triggerId);
+
+        return triggerId;
+
+    } catch (error) {
+        console.error('動的トリガーの作成に失敗しました: ' + error.message);
+        throw error;
+    }
+}
+
+/**
+ * 発火済みのワンタイムトリガーを自分自身で削除する（後始末処理）
+ *
+ * @return {boolean} トリガーの削除に成功した場合は true、対象が見つからなかった場合は false
+ */
+function cleanupFiredTrigger() {
+    const properties = PropertiesService.getScriptProperties();
+    const triggerId = properties.getProperty('PENDING_TRIGGER_ID');
+
+    if (!triggerId) {
+        console.log('PENDING_TRIGGER_ID が見つからないため、削除処理をスキップします。');
+        return false;
+    }
+
+    let deleted = false;
+
+    try {
+        const triggers = ScriptApp.getProjectTriggers();
+        for (const trigger of triggers) {
+            if (trigger.getUniqueId() === triggerId) {
+                ScriptApp.deleteTrigger(trigger);
+                deleted = true;
+                console.log('発火済みトリガーを削除しました: ID=' + triggerId);
+                break;
+            }
+        }
+
+        if (!deleted) {
+            console.warn('削除対象のトリガー(ID=' + triggerId + ')が見つかりませんでした。既に削除済みの可能性があります。');
+        }
+
+    } catch (error) {
+        console.error('トリガー削除中にエラーが発生しました: ' + error.message);
+
+    } finally {
+        properties.deleteProperty('PENDING_TRIGGER_ID');
+    }
+
+    return deleted;
+}
+
+/**
+ * 指定した関数名に紐づくトリガーの件数を取得する（デバッグ・テスト用）
+ *
+ * @param {string} functionName - 確認対象の関数名
+ * @return {number} 該当関数に紐づくトリガーの件数
+ */
+function countTriggersFor(functionName) {
+    const triggers = ScriptApp.getProjectTriggers();
+    return triggers.filter(t => t.getHandlerFunction() === functionName).length;
+}
+
+
+
+② 11_Config.設定管理.gs（追記・diff）
+ファイル末尾（getSharedToken() 関数、約179行目あたり）の直後に追記してください。
+
+diff
+ function getSharedToken() {
+   const token = PropertiesService.getScriptProperties().getProperty('API_SHARED_TOKEN');
+   if (!token) {
+     throw new Error('スクリプトプロパティ API_SHARED_TOKEN が設定されていません。送信側(GetInventoryData)と同じ値を設定してください。');
+   }
+   return token;
+ }
++
++/**
++ * 受信側ワンタイムトリガーの発火までの遅延時間（ミリ秒）を取得する
++ *
++ * doPost(e) でトークン検証後に作成する動的トリガーの遅延時間。
++ * 未設定の場合は既定値 100（100ms）を返す。
++ *
++ * @return {number} 遅延時間（ミリ秒）
++ */
++function getReceiverTriggerDelayMs() {
++  const value = PropertiesService.getScriptProperties().getProperty('RECEIVER_TRIGGER_DELAY_MS');
++  return value ? parseInt(value, 10) : 100;
++}
+
+
+ファイル冒頭（14〜24行目あたり）の「スクリプトプロパティ一覧」表にも1行追加してください。
+diff
+  * | TRIGGER_FUNCTION_NAME     | トリガーに設定するメイン関数名                    |
+  * | TRIGGER_MODE              | トリガーモード (TODAY / TOMORROW)                 |
+  * | SHEET_CONFIG_1            | {"id":"SSID","sheet":"シート名"} 形式のJSON       |
+  * | SHEET_CONFIG_2            | （同上、複数設定可能）                            |
++ * | RECEIVER_TRIGGER_DELAY_MS | 受信側ワンタイムトリガーの遅延ms（未設定時100）   |
+  *
+
+③ 16_WebhookReceiver.受信処理.gs（修正・diff）
+ファイルヘッダー（1〜13行目）の更新
+diff
+ /**
+  * @file 16_WebhookReceiver.受信処理.gs
+  * @description GetInventoryData（送信側）からの動的トリガー経由HTTP呼び出しを受信するモジュール。
+- * 共有トークンによる簡易認証を行い、正当なリクエストのみ distributeInventoryChanges() を起動する。
++ * 共有トークンによる簡易認証を行い、正当なリクエストのみ動的ワンタイムトリガーを作成する。
++ * doPost自体はトリガー作成と即時レスポンス返却のみを行い、実際の配布処理（distributeInventoryChanges）は
++ * 別途トリガー経由で triggeredDistributeInventory() として実行される。
++ * これにより doPost 経由の実行特有のログ欠落問題を回避し、通常のトリガー実行ログとして記録される。
+  *
+  * ### 依存関係
+- * - 参照先: 10_Main.エントリーポイント.gs (distributeInventoryChanges)
++ * - 参照先: 10_Main.エントリーポイント.gs (distributeInventoryChanges)
+  *           11_Config.設定管理.gs (getSharedToken)
++ *           11_Config.設定管理.gs (getReceiverTriggerDelayMs)
+  *           12_Logger.ログ管理.gs (logWithLevel, logError)
++ *           18_TriggerManager.トリガー管理.gs (scheduleOneTimeTrigger, cleanupFiredTrigger)
+  *
+- * @version 1.0
++ * @version 2.0 (Phase A: 動的トリガー方式に変更)
+  * @see doPost - 送信側からのPOSTリクエスト受信処理
++ * @see triggeredDistributeInventory - 動的トリガーから呼び出されるエントリーポイント
+  */
+
+
+doPost内の関数ヘッダー（16〜27行目）と本体（51〜52行目）の更新
+diff
+ /**
+  * Web Appとして公開した際のPOSTリクエスト受信処理
+  *
+  * 【処理フロー】
+  * 1. リクエストボディ（JSON）をパースする
+  * 2. body.token と getSharedToken() を比較し、一致しない場合は result: 'unauthorized' を返す
+  *    （Web AppはHTTPステータスを自由に変更できないため、論理的な成否はボディのresultフィールドで表現する）
+- * 3. 一致する場合、distributeInventoryChanges() を呼び出す
+- * 4. 処理結果（成功/エラー）をJSONで返す
++ * 3. 一致する場合、scheduleOneTimeTrigger('triggeredDistributeInventory', ...) で
++ *    動的ワンタイムトリガーを作成する（配布処理自体はここでは実行しない）
++ * 4. トリガー作成の受付結果をJSONで返す（実際の配布完了を待たずに即時返却する）
+  *
+  * @param {Object} e - GASのイベントオブジェクト（e.postData.contents にPOSTボディが入る）
+  * @return {GoogleAppsScript.Content.TextOutput} JSON形式のレスポンス
+  */
+
+diff
+-    // 配布処理を実行（内部でLockServiceによる多重実行防止を行う。タスク3参照）
+-    distributeInventoryChanges();
++    // 配布処理は直接実行せず、動的ワンタイムトリガーに委譲する
++    // doPost自体は受付確認のみを返し、実処理はトリガー経由の実行としてログに記録させる
++    scheduleOneTimeTrigger('triggeredDistributeInventory', getReceiverTriggerDelayMs());
+
+     return ContentService
+-      .createTextOutput(JSON.stringify({ result: 'success', receivedAt: receivedAt.toISOString() }))
++      .createTextOutput(JSON.stringify({ result: 'success', receivedAt: receivedAt.toISOString(), message: 'リクエストを受け付けました。配布処理は別トリガーで実行されます。' }))
+       .setMimeType(ContentService.MimeType.JSON);
+
+
+新規関数の追加（doPost終了の } の直後、doGet関数の前）
+javascript
+/**
+ * 動的ワンタイムトリガーから呼び出されるエントリーポイント関数
+ *
+ * doPost(e) から scheduleOneTimeTrigger('triggeredDistributeInventory', ...) という形で
+ * 登録され、指定時間後にGASのトリガー機構から自動的に呼び出される。
+ * 通常のトリガー実行として記録されるため、doPost単体では確認できなかった
+ * 実行ログ（console.log）がここでは正しく「実行数」パネルに記録される。
+ *
+ * 【処理フロー】
+ * 1. distributeInventoryChanges() を実行する（内部のLockServiceによる多重実行防止はそのまま機能する）
+ * 2. 処理の成否に関わらず、finally で cleanupFiredTrigger() を呼び出し、
+ *    自分自身に紐づくワンタイムトリガーを削除する
+ *
+ * @return {void}
+ */
+function triggeredDistributeInventory() {
+  console.log('=== triggeredDistributeInventory 発火 ===');
+  console.log('発火時刻: ' + Utilities.formatDate(new Date(), 'JST', 'yyyy/MM/dd HH:mm:ss'));
+
+  try {
+    distributeInventoryChanges();
+  } catch (error) {
+    logError('triggeredDistributeInventory 実行中にエラーが発生しました: ' + error.message);
+  } finally {
+    cleanupFiredTrigger();
+  }
+}
+
+④ 99_Tests.テスト.gs（テスト12の更新方針）
+testWebhookReceiver() の「2. 正常系テスト」部分は、現状 distributeInventoryChanges() の同期完了を前提にしたコメントになっているため、トリガー作成の検証に差し替える必要があります。
+変更点（該当箇所をこの内容に差し替え）
+
+javascript
+    // 2. 正常系テスト (正しいトークン)
+    // ※ doPost はトリガーを作成するだけで、配布処理自体はここでは実行されない
+    console.log('\n--- 2. 正常系テスト (正しいトークン) ---');
+    const mockEventSuccess = {
+      postData: {
+        contents: JSON.stringify({
+          source: 'TestSender',
+          token: testToken
+        })
+      }
+    };
+    const responseSuccess = doPost(mockEventSuccess);
+    const resultSuccess = JSON.parse(responseSuccess.getContentText());
+    console.log('レスポンス: ' + responseSuccess.getContentText());
+
+    if (resultSuccess.result === 'success') {
+      console.log('✓ 期待通り受付成功となりました。');
+    } else {
+      console.error('❌ エラー: 受付成功が返されませんでした。');
+    }
+
+    // トリガーが実際に1件作成されたかを確認
+    const triggerCount = countTriggersFor('triggeredDistributeInventory');
+    console.log('triggeredDistributeInventory のトリガー件数: ' + triggerCount + ' (期待値: 1)');
+    if (triggerCount === 1) {
+      console.log('✓ トリガー作成確認: 成功');
+    } else {
+      console.error('❌ トリガー作成確認: 失敗');
+    }
+
+テスト用トークンの後始末（finally 内）は既存のままで構いません。なお、このテストで実際に作成されたトリガーは数百ms後に本当に発火し distributeInventoryChanges() が走ります。テスト環境への影響が気になる場合は、finally 節に ScriptApp.getProjectTriggers().filter(t => t.getHandlerFunction() === 'triggeredDistributeInventory').forEach(t => ScriptApp.deleteTrigger(t)); を追加して、発火前に削除する形にもできます。どちらにするかはお任せします。
+
+適用順序（スモールステップ）
+
+18_TriggerManager.トリガー管理.gs を新規作成
+11_Config.設定管理.gs に getReceiverTriggerDelayMs() を追記
+16_WebhookReceiver.受信処理.gs を修正
+99_Tests.テスト.gs の testWebhookReceiver() を更新し、実行して ✓ トリガー作成確認: 成功 を確認
+本番のWebhook経路（送信側からの実際のPOST）で動作確認し、「実行数」パネルで triggeredDistributeInventory の実行ログが内容まで見えるかを確認

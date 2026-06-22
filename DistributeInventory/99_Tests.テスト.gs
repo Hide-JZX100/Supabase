@@ -720,8 +720,8 @@ function testWebhookReceiver() {
       }
     };
     const responseFail = doPost(mockEventFail);
-    const resultFail = JSON.parse(responseFail.getContentText());
-    console.log('レスポンス: ' + responseFail.getContentText());
+    const resultFail = JSON.parse(responseFail.getContent());
+    console.log('レスポンス: ' + responseFail.getContent());
     if (resultFail.result === 'unauthorized') {
       console.log('✓ 期待通り認証エラーとなりました。');
     } else {
@@ -729,7 +729,7 @@ function testWebhookReceiver() {
     }
 
     // 2. 正常系テスト (正しいトークン)
-    // ※ 実際に distributeInventoryChanges() が実行されるため、Supabaseやスプレッドシートの接続が稼働している必要があります。
+    // ※ doPost はトリガーを作成するだけで、配布処理自体はここでは実行されません
     console.log('\n--- 2. 正常系テスト (正しいトークン) ---');
     const mockEventSuccess = {
       postData: {
@@ -740,17 +740,39 @@ function testWebhookReceiver() {
       }
     };
     const responseSuccess = doPost(mockEventSuccess);
-    const resultSuccess = JSON.parse(responseSuccess.getContentText());
-    console.log('レスポンス: ' + responseSuccess.getContentText());
+    const resultSuccess = JSON.parse(responseSuccess.getContent());
+    console.log('レスポンス: ' + responseSuccess.getContent());
+
     if (resultSuccess.result === 'success') {
-      console.log('✓ 期待通り正常終了しました。');
+      console.log('✓ 期待通り受付成功となりました。');
     } else {
-      console.error('❌ エラー: 正常終了しませんでした。内容: ' + JSON.stringify(resultSuccess));
+      console.error('❌ エラー: 受付成功が返されませんでした。内容: ' + JSON.stringify(resultSuccess));
+    }
+
+    // トリガーが実際に1件作成されたかを確認
+    const triggerCount = countTriggersFor('triggeredDistributeInventory');
+    console.log('triggeredDistributeInventory のトリガー件数: ' + triggerCount + ' (期待値: 1)');
+    if (triggerCount === 1) {
+      console.log('✓ トリガー作成確認: 成功');
+    } else {
+      console.error('❌ トリガー作成確認: 失敗');
     }
 
   } catch (error) {
     console.error('❌ エラー: ' + error.message);
   } finally {
+    // テストで一時的に作成されたトリガーを強制削除（非同期発火を防ぐ）
+    try {
+      const testTriggers = ScriptApp.getProjectTriggers()
+        .filter(t => t.getHandlerFunction() === 'triggeredDistributeInventory');
+      if (testTriggers.length > 0) {
+        console.log('テスト用トリガーをクリーンアップします (件数: ' + testTriggers.length + ')');
+        testTriggers.forEach(t => ScriptApp.deleteTrigger(t));
+      }
+    } catch (cleanupError) {
+      console.error('❌ トリガークリーンアップ中にエラーが発生しました: ' + cleanupError.message);
+    }
+
     // スクリプトプロパティを元に戻す
     if (originalToken) {
       properties.setProperty('API_SHARED_TOKEN', originalToken);
