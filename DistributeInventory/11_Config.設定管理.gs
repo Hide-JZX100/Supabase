@@ -22,6 +22,7 @@
  * | TRIGGER_MODE              | トリガーモード (TODAY / TOMORROW)                 |
  * | SHEET_CONFIG_1            | {"id":"SSID","sheet":"シート名"} 形式のJSON       |
  * | SHEET_CONFIG_2            | （同上、複数設定可能）                            |
+ * | RECEIVER_TRIGGER_DELAY_MS | 受信側ワンタイムトリガーの遅延ms（未設定時100）   |
  *
  * @version 1.0
  */
@@ -176,4 +177,17 @@ function getSharedToken() {
     throw new Error('スクリプトプロパティ API_SHARED_TOKEN が設定されていません。送信側(GetInventoryData)と同じ値を設定してください。');
   }
   return token;
+}
+
+/**
+ * 受信側ワンタイムトリガーの発火までの遅延時間（ミリ秒）を取得する
+ *
+ * doPost(e) でトークン検証後に作成する動的トリガーの遅延時間。
+ * 未設定の場合は既定値 100（100ms）を返す。
+ *
+ * @return {number} 遅延時間（ミリ秒）
+ */
+function getReceiverTriggerDelayMs() {
+  const value = PropertiesService.getScriptProperties().getProperty('RECEIVER_TRIGGER_DELAY_MS');
+  return value ? parseInt(value, 10) : 100;
 }
