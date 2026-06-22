@@ -60,7 +60,7 @@ function callDistributeInventory() {
  *
  * 【処理フロー】
  * 1. getReceiverWebAppUrl() でURLを取得する
- * 2. UrlFetchApp.fetch() でPOSTリクエストを送信する（muteHttpExceptions: true）
+ * 2. UrlFetchApp.fetch() でタイムアウト30秒制限（timeoutSeconds: 30）を設けてPOSTリクエストを送信する（muteHttpExceptions: true）
  * 3. 通信レベルのステータスコードが200であることを確認する（200以外は通信エラーとしてスロー）
  * 4. レスポンスボディをJSONパースし、result フィールドが 'success' であることを確認する
  *
@@ -79,7 +79,8 @@ function callDistributeInventoryWebApp(payload) {
         method: 'post',
         contentType: 'application/json',
         payload: JSON.stringify(payload),
-        muteHttpExceptions: true
+        muteHttpExceptions: true,
+        timeoutSeconds: 30
     };
 
     logWithLevel(LOG_LEVEL.SUMMARY, 'DistributeInventoryへ送信中... URL=' + url);
