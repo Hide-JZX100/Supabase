@@ -93,12 +93,12 @@ function setTrigger() {
 
     // 実行したい時刻（[時, 分]）の配列
     const executionTimes = [
-        [8, 0],     // 8:00
-        [10, 0],    // 10:00
-        [13, 30],   // 13:30
-        [16, 0],    // 16:00
-        [19, 0],    // 19:00
-        [21, 0],    // 21:00
+        [7, 55],     // 7:55
+        [9, 55],     // 9:55
+        [13, 25],    // 13:25
+        [15, 55],    // 15:55
+        [18, 55],    // 18:55
+        [20, 55],    // 20:55
     ];
 
     // 現在時刻を取得
@@ -266,11 +266,11 @@ function deleteTriggersForFunction(functionName, maxRetry = 3, baseSleepMs = 500
  * updateInventoryDataFromGoodsMaster 専用トリガー設定
  *
  * 【目的】
- * 商品マスタAPI全件取得関数を1日1回（0:10）実行するトリガーを設定する
+ * 商品マスタAPI全件取得関数を1日1回（0:5）実行するトリガーを設定する
  * updateInventoryDataBatchWithRetry のトリガーとは独立して管理する
  *
  * 【実行タイミング】
- * 毎日 0:10（在庫更新の最初のサイクルと同じ時刻）
+ * 毎日 0:5（在庫更新の最初のサイクルの5分前）
  *
  * 【使用方法】
  * 1. setTriggerForGoodsMaster() を手動実行してトリガーを登録する
@@ -280,7 +280,7 @@ function deleteTriggersForFunction(functionName, maxRetry = 3, baseSleepMs = 500
 function setTriggerForGoodsMaster() {
     const FUNCTION_NAME = 'updateInventoryDataFromGoodsMaster';
     const TRIGGER_HOUR = 0;
-    const TRIGGER_MIN = 10;
+    const TRIGGER_MIN = 5;
 
     Logger.log(`=== ${FUNCTION_NAME} トリガー設定開始 ===`);
 
@@ -292,7 +292,7 @@ function setTriggerForGoodsMaster() {
         Logger.log(`処理を継続しますが、トリガーが重複登録される可能性があります`);
     }
 
-    // 翌日の 0:10 にトリガーを設定
+    // 翌日の 0:5 にトリガーを設定
     const triggerTime = new Date();
     triggerTime.setDate(triggerTime.getDate() + 1);
     triggerTime.setHours(TRIGGER_HOUR);
