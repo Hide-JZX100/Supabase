@@ -32,7 +32,8 @@ BEGIN
   -- 更新処理
   WITH deactivated AS (
       UPDATE public."NE_InventoryData"
-      SET "is_active" = false
+      SET "is_active" = false,  
+          "更新日時" = NOW()
       WHERE "商品コード" != ALL(active_codes)
         AND "is_active" = true
       RETURNING "NE_InventoryData".*
