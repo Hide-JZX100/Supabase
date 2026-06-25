@@ -15,6 +15,9 @@
 --      - 現在 is_active が true である
 --   2. 該当レコードの is_active を false に更新
 --   3. 更新された行数を取得し、戻り値として返却する
+--
+-- 修正履歴:
+-- - 2026-06-25: ネクストエンジンからの更新に合わせ、変更点をヒストリーテーブル（NE_InventoryHistory）へ保存する処理を追加
 -- =========================================================================
 CREATE OR REPLACE FUNCTION public.deactivate_missing_goods(active_codes TEXT[])
 RETURNS INT AS $$
@@ -27,10 +30,23 @@ BEGIN
   END IF;
 
   -- 更新処理
-  UPDATE public."NE_InventoryData"
-  SET "is_active" = false
-  WHERE "商品コード" != ALL(active_codes)
-    AND "is_active" = true;
+  WITH deactivated AS (
+      UPDATE public."NE_InventoryData"
+      SET "is_active" = false
+      WHERE "商品コード" != ALL(active_codes)
+        AND "is_active" = true
+      RETURNING "NE_InventoryData".*
+  )
+  INSERT INTO public."NE_InventoryHistory" (
+      "商品コード", "商品名", "在庫数", "引当数", "フリー在庫数",
+      "予約在庫数", "予約引当数", "予約フリー在庫数", "不良在庫数",
+      "発注残数", "欠品数", "JANコード", "更新日時", "is_active"
+  )
+  SELECT
+      "商品コード", "商品名", "在庫数", "引当数", "フリー在庫数",
+      "予約在庫数", "予約引当数", "予約フリー在庫数", "不良在庫数",
+      "発注残数", "欠品数", "JANコード", "更新日時", "is_active"
+  FROM deactivated;
 
   -- 更新された行数を取得
   GET DIAGNOSTICS updated_count = ROW_COUNT;

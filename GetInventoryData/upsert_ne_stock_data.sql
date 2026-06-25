@@ -11,10 +11,16 @@
  *                        必須キー: 商品コード, 在庫数, 引当数, フリー在庫数,
  *                                  予約在庫数, 予約引当数, 予約フリー在庫数,
  *                                  不良在庫数, 発注残数, 欠品数
+ *
+ * 修正履歴:
+ * - 2026-06-25: ネクストエンジンからの更新に合わせ、変更点をヒストリーテーブル（NE_InventoryHistory）へ保存する処理を追加
  *******************************************************************************/
 CREATE OR REPLACE FUNCTION public.upsert_ne_stock_data(json_data JSONB)
 RETURNS VOID AS $$
 BEGIN
+
+    WITH upserted AS (
+    
     INSERT INTO public."NE_InventoryData" (
         "商品コード", "在庫数", "引当数", "フリー在庫数",
         "予約在庫数", "予約引当数", "予約フリー在庫数", "不良在庫数",
@@ -52,6 +58,20 @@ BEGIN
         public."NE_InventoryData"."在庫数"       IS DISTINCT FROM EXCLUDED."在庫数"  OR
         public."NE_InventoryData"."引当数"       IS DISTINCT FROM EXCLUDED."引当数"  OR
         public."NE_InventoryData"."フリー在庫数" IS DISTINCT FROM EXCLUDED."フリー在庫数" OR
-        public."NE_InventoryData"."欠品数"       IS DISTINCT FROM EXCLUDED."欠品数";
+        public."NE_InventoryData"."欠品数"       IS DISTINCT FROM EXCLUDED."欠品数"
+    RETURNING "NE_InventoryData".*
+    )
+    
+    INSERT INTO public."NE_InventoryHistory" (
+        "商品コード", "商品名", "在庫数", "引当数", "フリー在庫数",
+        "予約在庫数", "予約引当数", "予約フリー在庫数", "不良在庫数",
+        "発注残数", "欠品数", "JANコード", "更新日時", "is_active"
+    )
+    SELECT
+        "商品コード", "商品名", "在庫数", "引当数", "フリー在庫数",
+        "予約在庫数", "予約引当数", "予約フリー在庫数", "不良在庫数",
+        "発注残数", "欠品数", "JANコード", "更新日時", "is_active"
+    FROM upserted;
+
 END;
 $$ LANGUAGE plpgsql;
