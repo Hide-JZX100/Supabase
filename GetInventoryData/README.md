@@ -107,31 +107,28 @@ Google Apps Script（本プロジェクト）
 
 | テーブル名 | 用途 |
 |-----------|------|
-| `public."NE_InventoryData"` | 在庫情報の保存先 |
+| `public."NE_InventoryData"` | 在庫情報の保存先（最新データ / カレントテーブル） |
+| `public."NE_InventoryHistory"` | 在庫情報の変更履歴保存先（履歴データ / ヒストリーテーブル） |
 
 ### RPC 関数
 
 | 関数名 | 呼び出し元 | 用途 |
 |--------|-----------|------|
-| `upsert_ne_inventory_data` | `updateInventoryDataFromGoodsMaster` | 商品マスタ全件 upsert（全列更新） |
-| `upsert_ne_stock_data` | `updateInventoryDataBatchWithRetry` | 在庫マスタ差分 upsert（在庫数値列のみ更新） |
-| `deactivate_missing_goods` | `updateInventoryDataFromGoodsMaster` | 同期対象から外れた（廃止）商品の一括非アクティブ化 |
+| `upsert_ne_inventory_data` | `updateInventoryDataFromGoodsMaster` | 商品マスタ全件 upsert（全列更新）および履歴保存 |
+| `upsert_ne_stock_data` | `updateInventoryDataBatchWithRetry` | 在庫マスタ差分 upsert（在庫数値列のみ更新）および履歴保存 |
+| `deactivate_missing_goods` | `updateInventoryDataFromGoodsMaster` | 同期対象から外れた（廃止）商品の一括非アクティブ化および履歴保存 |
 
-### 差分更新の仕組み
+### 差分更新と履歴保存の仕組み
 
-両 RPC 関数とも、基本的には以下の列に変化がある場合のみ `更新日時` を更新します。
+各 RPC 関数では、指定のデータ項目に変化がある場合のみカレントテーブル（`NE_InventoryData`）の `更新日時` を更新し、その変更されたレコードを履歴テーブル（`NE_InventoryHistory`）に追記します。
 
-- 在庫数
-- 引当数
-- フリー在庫数
-- 欠品数
+- **差分更新・履歴保存のトリガーとなる条件：**
+  - 在庫数・引当数・フリー在庫数・欠品数のいずれかに変化がある場合（全関数共通）
+  - JANコードに変更がある場合（`upsert_ne_inventory_data` のみ）
+  - 非アクティブから再度インポートされてアクティブ化（`is_active = FALSE` から `TRUE`）される場合（`upsert_ne_inventory_data` のみ）
+  - 対象商品コードが同期データから外れ、非アクティブ化される場合（`deactivate_missing_goods` のみ）
 
-また、`upsert_ne_inventory_data` (商品マスタ全件 upsert) では、以下の項目も更新および `更新日時` 更新のトリガーとなります。
-- **JANコード** の変更
-- **`is_active = FALSE`** （非アクティブ状態から再度インポートされてアクティブ化される場合）
-
-変化がない商品は `更新日時` を変更しません。  
-これにより `getChangedInventorySince()` で実際に在庫が変化した、またはアクティブ状態が復活した商品のみを効率的に取得できます。
+変化がない商品はカレントテーブルの `更新日時` を変更せず、履歴テーブルへの保存もスキップします。これにより `getChangedInventorySince()` を通じて、実際に更新された商品のみを効率的に検知できます。
 
 ---
 
