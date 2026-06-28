@@ -8,7 +8,7 @@
 -- [ステップ1] 単一商品コードでの動作確認用クエリ
 SELECT 
     "商品コード", 
-    "記録日時", 
+    "記録日時" AT TIME ZONE 'Asia/Tokyo' AS "記録日時_JST", 
     "在庫数",
     LAG("在庫数") OVER (PARTITION BY "商品コード" ORDER BY "記録日時" ASC) AS "在庫数_前回",
     "フリー在庫数",
@@ -18,4 +18,4 @@ FROM
 WHERE 
     "商品コード" = 'A001'
 ORDER BY 
-    "記録日時" ASC;
+    "記録日時" ASC; -- ※並び替えやLAGの基準は、内部的な「元の記録日時」のままでOKです（その方が高速です）
