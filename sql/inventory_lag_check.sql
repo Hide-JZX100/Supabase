@@ -10,7 +10,9 @@ SELECT
     "商品コード", 
     "記録日時", 
     "在庫数",
-    LAG("在庫数") OVER (PARTITION BY "商品コード" ORDER BY "記録日時" ASC) AS "在庫数_前回"
+    LAG("在庫数") OVER (PARTITION BY "商品コード" ORDER BY "記録日時" ASC) AS "在庫数_前回",
+    "フリー在庫数",
+    LAG("フリー在庫数") OVER (PARTITION BY "商品コード" ORDER BY "記録日時" ASC) AS "フリー在庫数_前回"
 FROM 
     "NE_InventoryHistory"
 WHERE 
