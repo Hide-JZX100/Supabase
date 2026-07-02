@@ -54,8 +54,19 @@ function test_get_inventory_changes_standalone() {
       const data = JSON.parse(body);
       Logger.log("取得データ件数: " + data.length + " 件");
       if (data.length > 0) {
-        Logger.log("最初のレコードのサンプル:");
-        Logger.log(JSON.stringify(data[0], null, 2));
+        Logger.log("--- 取得データ一覧 ---");
+        data.forEach(function(row, index) {
+          Logger.log(
+            "[" + (index + 1) + "] " +
+            "商品: " + row.item_code + " | " +
+            "日時: " + row.occurrence_at + " | " +
+            "在庫: " + row.current_quantity + " (前回: " + row.prev_quantity + ", 差分: " + row.diff_quantity + ") | " +
+            "フリー: " + row.current_free_quantity + " (前回: " + row.prev_free_quantity + ", 差分: " + row.diff_free_quantity + ")"
+          );
+        });
+        
+        // 必要に応じて、以下のコメントアウトを解除するとJSON生データも全件出力できます
+        // Logger.log(JSON.stringify(data, null, 2));
       } else {
         Logger.log("該当データがありませんでした（検証用データの挿入をご確認ください）");
       }
