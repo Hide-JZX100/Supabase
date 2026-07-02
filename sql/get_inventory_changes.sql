@@ -15,7 +15,7 @@
 --   - diff_free_quantity integer : フリー在庫数差分（今回 - 前回、初回は0）
 -- )
 -- 変更履歴:
---   2026-07-02: 新規作成（CTE構造、JST変換、前回値・差分列の追加）
+--   2026-07-02: 新規作成（CTE構造、前回値・差分列の追加）
 -- =================================================================
 CREATE OR REPLACE FUNCTION get_inventory_changes(target_item_codes text[])
 RETURNS TABLE (
@@ -33,7 +33,7 @@ BEGIN
     WITH lag_data AS (
         SELECT 
             "商品コード"::text AS item_code, 
-            ("記録日時" AT TIME ZONE 'Asia/Tokyo') AS occurrence_at, 
+            "記録日時" AS occurrence_at, 
             "在庫数"::integer AS current_qty,
             LAG("在庫数") OVER (
                 PARTITION BY "商品コード" 
