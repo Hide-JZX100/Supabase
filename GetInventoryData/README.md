@@ -20,7 +20,7 @@ graph TD
     %% API取得
     Main -->|1. 全件データ取得| API[13_NextEngineAPI.API通信.gs<br>fetchAllGoodsData]
     API -->|HTTP POST| NE_Goods[ネクストエンジン API<br>/api_v1_master_goods/search]
-    NE_Goods -->|JSONデータ (1000件ずつ)| API
+    NE_Goods -->|"JSONデータ (1000件ずつ)"| API
     
     %% フィルタ・整形
     API -->|取得データ| Main
@@ -85,7 +85,7 @@ graph TD
 ```mermaid
 graph TD
     DistTrigger[動的トリガー<br>callDistributeInventory] -->|発火| Caller[19_DistributeCaller.配布呼び出し.gs<br>callDistributeInventory]
-    Caller -->|HTTP POST (リトライ付き)| DistApp[配布側 Web App<br>DistributeInventory]
+    Caller -->|"HTTP POST (リトライ付き)"| DistApp[配布側 Web App<br>DistributeInventory]
     Caller -->|処理完了後| TriggerMgr[18_TriggerManager.トリガー管理.gs<br>cleanupFiredTrigger]
     TriggerMgr -->|トリガー自己削除| ProjectTriggers[GAS プロジェクトトリガー]
 ```
