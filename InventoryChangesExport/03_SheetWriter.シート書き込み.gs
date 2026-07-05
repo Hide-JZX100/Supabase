@@ -20,3 +20,15 @@ function getTargetSpreadsheet_() {
   // フォールバックとしてアクティブなスプレッドシートを使用
   return SpreadsheetApp.getActiveSpreadsheet();
 }
+
+/**
+ * スクリプトプロパティから入力元のシート名を取得する（デフォルト: "入力"）
+ * 
+ * @return {string} 入力元シート名
+ * @private
+ */
+function getInputSheetName_() {
+  const properties = PropertiesService.getScriptProperties();
+  return properties.getProperty("INPUT_SHEET_NAME") || "入力";
+}
+
