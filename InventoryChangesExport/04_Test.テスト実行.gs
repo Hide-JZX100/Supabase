@@ -111,7 +111,7 @@ function test_sheetOperations() {
 }
 
 /**
- * 【テスト】フェーズ4：統合テスト（手動テストの事前準備・自動検証）
+ * 【テスト】フェーズ4/5：統合テスト（正常系・トースト・重複排除）
  * 
  * 入力シートに特定のテストデータを書き込み、メイン処理 `runInventoryChangesExport` を実行して、
  * スプレッドシートへの出力が正しく完了するか一気通貫でテストします。
@@ -127,7 +127,7 @@ function test_sheetOperations() {
 function test_integration_run() {
   Logger.log("=== [Test] 統合テスト開始 ===");
   
-  const ss = getTargetSpreadsheet_();
+  const ss = getTargetSpreadsheet();
   const inputSheetName = getInputSheetName_();
   const inputSheet = ss.getSheetByName(inputSheetName);
   
@@ -157,11 +157,11 @@ function test_integration_run() {
   inputSheet.getRange(2, 1, testCodes.length, 1).setValues(testCodes);
   Logger.log("入力シートにテスト用商品コードをセットしました: " + JSON.stringify(testCodes));
   
-  // メイン処理の実行
+  // メメイン処理の実行
   Logger.log("メイン処理 runInventoryChangesExport を起動します...");
   try {
     runInventoryChangesExport();
-    Logger.log("メイン処理が正常に終了しました。「前後比較」シートのデータを確認してください。");
+    Logger.log("メイン処理が正常に終了しました。「前後比較」シートのデータおよびスプレッドシートのトースト通知を確認してください。");
   } catch (e) {
     Logger.log("メイン処理実行中にエラーが発生しました: " + e.toString());
   }
@@ -170,7 +170,64 @@ function test_integration_run() {
 }
 
 /**
- * 【テスト】フェーズ4：統合テスト（異常系・入力空）
+ * 【テスト】ステップ5-1：重複排除機能の検証テスト
+ * 
+ * 入力シートにあえて重複した商品コードを書き込み、読み込み処理で重複が正しく排除され、
+ * API送信がユニークな件数のみで行われるか検証します。
+ */
+function test_integration_duplicate_run() {
+  Logger.log("=== [Test] 重複排除機能のテスト開始 ===");
+  
+  const ss = getTargetSpreadsheet();
+  const inputSheetName = getInputSheetName_();
+  const inputSheet = ss.getSheetByName(inputSheetName);
+  
+  if (!inputSheet) {
+    Logger.log("エラー: 入力シート '" + inputSheetName + "' が存在しません。");
+    return;
+  }
+  
+  // 重複したテストデータを入力シートに書き込みます（gyが重複）
+  const testCodes = [
+    ["0010-bb101p-s-gy"],
+    ["0010-bb101p-s-gy"], // 重複
+    ["0010-bb101p-s-gf"],
+    ["0010-bb101p-s-gf"]  // 重複
+  ];
+  
+  const lastRow = inputSheet.getLastRow();
+  if (lastRow >= 2) {
+    inputSheet.getRange(2, 1, lastRow - 1, 1).clearContent();
+  }
+  
+  inputSheet.getRange(2, 1, testCodes.length, 1).setValues(testCodes);
+  Logger.log("入力シートに重複を含むテスト用商品コードをセットしました。件数: " + testCodes.length + " 件");
+  
+  try {
+    // 読み込み関数の直接テスト
+    const itemCodes = getItemCodesFromInputSheet_();
+    Logger.log("読み込み結果の商品コード: " + JSON.stringify(itemCodes));
+    Logger.log("重複排除後の件数: " + itemCodes.length + " 件 (期待値: 2件)");
+    
+    if (itemCodes.length === 2) {
+      Logger.log("成功: 重複排除が正常に動作しています。");
+    } else {
+      Logger.log("失敗: 重複排除が正しく行われていません。");
+    }
+    
+    // 全体処理の実行
+    Logger.log("メイン処理 runInventoryChangesExport を起動します...");
+    runInventoryChangesExport();
+    Logger.log("メイン処理の動作が完了しました。");
+  } catch (e) {
+    Logger.log("実行中にエラーが発生しました: " + e.toString());
+  }
+  
+  Logger.log("=== [Test] 重複排除機能のテスト終了 ===");
+}
+
+/**
+ * 【テスト】フェーズ4：統合テスト（異常系：入力空）
  * 
  * 入力シートを空にした状態でメイン処理を実行し、エラーとならずに
  * 警告メッセージで正常に処理が中断することを確認します。
@@ -178,7 +235,7 @@ function test_integration_run() {
 function test_integration_empty_run() {
   Logger.log("=== [Test] 統合テスト（異常系：入力空）開始 ===");
   
-  const ss = getTargetSpreadsheet_();
+  const ss = getTargetSpreadsheet();
   const inputSheetName = getInputSheetName_();
   const inputSheet = ss.getSheetByName(inputSheetName);
   
