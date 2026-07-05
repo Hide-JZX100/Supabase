@@ -157,7 +157,7 @@ function test_integration_run() {
   inputSheet.getRange(2, 1, testCodes.length, 1).setValues(testCodes);
   Logger.log("入力シートにテスト用商品コードをセットしました: " + JSON.stringify(testCodes));
   
-  // メメイン処理の実行
+  // メイン処理の実行
   Logger.log("メイン処理 runInventoryChangesExport を起動します...");
   try {
     runInventoryChangesExport();
@@ -224,6 +224,55 @@ function test_integration_duplicate_run() {
   }
   
   Logger.log("=== [Test] 重複排除機能のテスト終了 ===");
+}
+
+/**
+ * 【テスト】ステップ5-2：自動リトライ機能の検証テスト（異常系URLによる擬似通信エラー）
+ * 
+ * 一時的にスクリプトプロパティの接続URLを無効なものに書き換えることで、通信例外を発生させ、
+ * 自動リトライ処理（3回）が正しく行われ、最終的に最大試行回数超過のエラーが投げられるか検証します。
+ * 
+ * ### 注意
+ * このテストを実行すると、一時的にスクリプトプロパティ `SUPABASE_URL` の内容が書き換わります。
+ * テスト終了時に自動的に元のURLに復元されますが、エラーで中断した場合はプロパティの再確認をしてください。
+ */
+function test_fetchWithRetry_Failure() {
+  Logger.log("=== [Test] 自動リトライ機能テスト開始 ===");
+  
+  const properties = PropertiesService.getScriptProperties();
+  const originalUrl = properties.getProperty("SUPABASE_URL");
+  
+  if (!originalUrl) {
+    Logger.log("エラー: スクリプトプロパティ 'SUPABASE_URL' が設定されていません。元の状態を特定できないため、テストを中断します。");
+    return;
+  }
+  
+  try {
+    // 1. URLを無効なものに書き換え通信エラーを擬似的に起こす
+    const dummyUrl = "https://invalid-supabase-url-for-retry-test.co";
+    properties.setProperty("SUPABASE_URL", dummyUrl);
+    Logger.log("接続先URLを一時的に無効なURLに変更しました: " + dummyUrl);
+    
+    // 2. RPC取得を実行（通信失敗によりリトライが走るはず）
+    Logger.log("RPC通信を呼び出します（3秒間隔でリトライが3回発生するのを確認します）...");
+    fetchInventoryChanges_(["A001"]);
+    
+    Logger.log("失敗: 通信エラーが発生するはずですが、正常終了しました。");
+  } catch (error) {
+    Logger.log("キャッチしたエラー (期待値): " + error.toString());
+    
+    if (error.message.indexOf("最大試行回数") !== -1) {
+      Logger.log("成功: 最大試行回数に達して自動リトライが諦められたことを確認しました。");
+    } else {
+      Logger.log("警告: 想定外のエラーメッセージです。");
+    }
+  } finally {
+    // 3. 元のURLに戻す（必須）
+    properties.setProperty("SUPABASE_URL", originalUrl);
+    Logger.log("接続先URLを元の設定に復元しました。");
+  }
+  
+  Logger.log("=== [Test] 自動リトライ機能テスト終了 ===");
 }
 
 /**
