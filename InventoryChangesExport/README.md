@@ -38,6 +38,34 @@ graph TD
     Writer -.->|ヘッダー自動作成 & 装飾| InputSheet
 ```
 
+#### テキスト形式での処理フロー
+
+Mermaidダイアグラムが正しく表示されない環境（ローカルプレビュー等）の場合は、以下のテキストフローをご参照ください。
+
+```
+1. 手動実行 (01_Main.gs: runInventoryChangesExport)
+   │
+   ├── 2. 入力データの取得 (03_SheetWriter.gs: getItemCodesFromInputSheet_)
+   │    ├── [入力] シートのA列から手動入力された商品コードを読み込み
+   │    └── 重複する商品コードを自動的に排除 (Unique化)
+   │
+   ├── 3. 件数上限チェック (01_Main.gs)
+   │    └── スクリプトプロパティ `MAX_ITEM_LIMIT` (デフォルト500件) を超える場合はエラーを投げて中断
+   │
+   ├── 4. Supabaseからの履歴データ取得 (02_SupabaseClient.gs: fetchInventoryChanges_)
+   │    ├── POSTリクエストにより get_inventory_changes RPCを呼び出し
+   │    └── [SRE] 一時的エラー発生時は最大3回自動リトライ (指数バックオフ: 2秒 ➔ 4秒 ➔ 8秒)
+   │
+   ├── 5. 前後比較シートへ出力 (03_SheetWriter.gs: writeInventoryChangesToSheet_)
+   │    ├── [前後比較] シートのヘッダー自動作成・装飾 (背景オレンジ・白太字・中央揃え)
+   │    ├── 2行目以降の既存データを一括クリア
+   │    └── 日時(UTC)をJSTに変換し、スプレッドシートへ一括書き込み
+   │
+   └── 6. 処理完了通知 (01_Main.gs: showToastIfPossible_)
+        └── スプレッドシートUIの右下にトースト表示 (UIが無いバックグラウンド環境ではログ出力のみで安全にスキップ)
+```
+
+
 ---
 
 ## 2. 導入手順
