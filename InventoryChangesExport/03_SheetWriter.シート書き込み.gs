@@ -32,3 +32,14 @@ function getInputSheetName_() {
   return properties.getProperty("INPUT_SHEET_NAME") || "入力";
 }
 
+/**
+ * スクリプトプロパティから出力先のシート名を取得する（デフォルト: "前後比較"）
+ * 
+ * @return {string} 出力先シート名
+ * @private
+ */
+function getOutputSheetName_() {
+  const properties = PropertiesService.getScriptProperties();
+  return properties.getProperty("OUTPUT_SHEET_NAME") || "前後比較";
+}
+
