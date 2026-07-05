@@ -17,11 +17,15 @@ Supabase RPC関数 `get_inventory_changes` の呼び出し結果を、
 
 ## 3. スクリプトプロパティ（事前設定が必要な項目）
 
-| キー名 | 内容 |
-|---|---|
-| `SUPABASE_URL` | SupabaseプロジェクトのURL |
-| `SUPABASE_KEY` | Supabaseのanonキー |
-| `TARGET_SPREADSHEET_ID` | 出力先SpreadsheetのID |
+| キー名 | 必須/任意 | 内容 | デフォルト値（未設定時） |
+|---|---|---|---|
+| `SUPABASE_URL` | **必須** | SupabaseプロジェクトのURL | - |
+| `SUPABASE_KEY` | **必須** | Supabaseのanonキー | - |
+| `TARGET_SPREADSHEET_ID` | **必須** | 出力先Spreadsheet of ID | - |
+| `INPUT_SHEET_NAME` | 任意 | 商品コードの入力元のシート名 | `"入力"` |
+| `OUTPUT_SHEET_NAME` | 任意 | 比較結果の出力先のシート名 | `"前後比較"` |
+| `MAX_ITEM_LIMIT` | 任意 | 一度に処理可能な最大商品コード件数 | `500` |
+
 
 ## 4. ファイル構成（命名規則準拠：`NN_英語名.日本語説明.gs`）
 
