@@ -4,14 +4,16 @@
  *
  * スクリプトプロパティに設定された接続情報（SUPABASE_URL, SUPABASE_KEY）を使用して、
  * SupabaseのAPIに直接リクエストを送信します。
+ * 一時的な通信エラーやサーバーエラー発生時の自動リトライ機能を備えています。
  */
 
 /**
- * SupabaseのRPC関数 `get_inventory_changes` を呼び出し、指定された商品コードの在庫前後比較データを取得する
- *
+ * SupabaseのRPC関数 `get_inventory_changes` を呼び出し、指定された商品コードの在庫前後比較データを取得する。
+ * 通信障害や一時的なサーバーエラーに備え、最大3回までの自動リトライを実行します。
+ * 
  * @param {string[]} itemCodes - 比較対象の商品コード配列
  * @return {Object[]} RPCから返却された在庫履歴データの配列（オブジェクトの配列）
- * @throws {Error} スクリプトプロパティが不足している場合、またはHTTP通信エラー・ステータスコードが200以外の場合
+ * @throws {Error} スクリプトプロパティが不足している場合、致命的なAPIエラー（400/401等）、または最大リトライ回数を超過した場合
  */
 function fetchInventoryChanges_(itemCodes) {
   if (!itemCodes || itemCodes.length === 0) {
@@ -45,25 +47,62 @@ function fetchInventoryChanges_(itemCodes) {
     "muteHttpExceptions": true
   };
 
-  // 3. HTTPリクエストの送信と例外処理
-  let response;
-  try {
-    response = UrlFetchApp.fetch(url, options);
-  } catch (error) {
-    throw new Error("Supabaseとの通信に失敗しました: " + error.toString());
+  // 3. 自動リトライ機能付きのHTTPリクエスト送信
+  const maxAttempts = 3;  // 最大再試行回数
+  const delayMs = 3000;   // 再試行間隔 (ミリ秒)
+  
+  let attempt = 0;
+  let lastError = null;
+
+  while (attempt <= maxAttempts) {
+    attempt++;
+    try {
+      if (attempt > 1) {
+        console.warn("一時的な接続エラーのため、" + delayMs + "ms 後に再試行します (" + (attempt - 1) + " / " + maxAttempts + " 回目)...");
+        Utilities.sleep(delayMs);
+      }
+
+      const response = UrlFetchApp.fetch(url, options);
+      const statusCode = response.getResponseCode();
+      const body = response.getContentText();
+
+      // 正常終了時は即座にデータを返す
+      if (statusCode === 200) {
+        return JSON.parse(body);
+      }
+
+      // 4xx / 5xx エラーの場合
+      lastError = new Error("Supabase RPC呼び出しエラー (ステータスコード: " + statusCode + "): " + body);
+      
+      // リトライすべきステータスコードか検証
+      // 429 (レートリミット) または 5xx (サーバー側エラー) 以外は、リトライせずに即時 throw して終了
+      const retryableStatuses = [429, 500, 502, 503, 504];
+      if (!retryableStatuses.includes(statusCode)) {
+        throw lastError;
+      }
+      
+      console.warn("一時的なサーバーエラーが返されました (ステータスコード: " + statusCode + ")。再試行をスケジュールします。");
+
+    } catch (error) {
+      lastError = error;
+      
+      // すでに即時 throw されたクライアントエラー（例: 400 Bad Request や 401 Unauthorized など）はそのまま上に投げる
+      if (error.message && error.message.indexOf("Supabase RPC呼び出しエラー") !== -1) {
+        // エラーメッセージに retryable なステータスコードが含まれていない場合は再スロー
+        const isRetryable = error.message.includes("429") || 
+                            error.message.includes("500") || 
+                            error.message.includes("502") || 
+                            error.message.includes("503") || 
+                            error.message.includes("504");
+        if (!isRetryable) {
+          throw error;
+        }
+      }
+      
+      console.warn("通信処理中に例外が発生しました (試行: " + attempt + "回目): " + error.toString());
+    }
   }
 
-  const statusCode = response.getResponseCode();
-  const body = response.getContentText();
-
-  // 4. ステータスコードの検証と戻り値の処理
-  if (statusCode !== 200) {
-    throw new Error("Supabase RPC呼び出しエラー (ステータスコード: " + statusCode + "): " + body);
-  }
-
-  try {
-    return JSON.parse(body);
-  } catch (parseError) {
-    throw new Error("レスポンスデータのパースに失敗しました: " + parseError.toString());
-  }
+  // すべてのリトライが失敗した場合
+  throw new Error("Supabaseとの通信に失敗しました。最大試行回数(" + (maxAttempts + 1) + "回)に達しました。最後のエラー: " + lastError.toString());
 }
