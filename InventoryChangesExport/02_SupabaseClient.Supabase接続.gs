@@ -4,12 +4,19 @@
  *
  * スクリプトプロパティに設定された接続情報（SUPABASE_URL, SUPABASE_KEY）を使用して、
  * SupabaseのAPIに直接リクエストを送信します。
- * 一時的な通信エラーやサーバーエラー発生時の自動リトライ機能を備えています。
+ * 一時的な通信エラーやサーバーエラー発生時の自動リトライ機能（指数バックオフ対応）を備えています。
  */
 
 /**
  * SupabaseのRPC関数 `get_inventory_changes` を呼び出し、指定された商品コードの在庫前後比較データを取得する。
- * 通信障害や一時的なサーバーエラーに備え、最大3回までの自動リトライを実行します。
+ * 通信障害や一時的なサーバーエラーに備え、指数バックオフを用いた自動リトライを実行します。
+ * 
+ * ### 指数バックオフの仕様
+ * - 最大試行回数: 4回（初回実行 + 最大3回の再試行）
+ * - 待機時間計算: `2秒 * 2^(再試行回数 - 1)`
+ *   - 再試行1回目 (2回目の実行前): 2秒 (2,000ms)
+ *   - 再試行2回目 (3回目の実行前): 4秒 (4,000ms)
+ *   - 再試行3回目 (4回目の実行前): 8秒 (8,000ms)
  * 
  * @param {string[]} itemCodes - 比較対象の商品コード配列
  * @return {Object[]} RPCから返却された在庫履歴データの配列（オブジェクトの配列）
@@ -47,9 +54,9 @@ function fetchInventoryChanges_(itemCodes) {
     "muteHttpExceptions": true
   };
 
-  // 3. 自動リトライ機能付きのHTTPリクエスト送信
-  const maxAttempts = 3;  // 最大再試行回数
-  const delayMs = 3000;   // 再試行間隔 (ミリ秒)
+  // 3. 指数バックオフを用いた自動リトライリクエスト送信
+  const maxAttempts = 3;      // 最大再試行回数
+  const baseDelayMs = 2000;   // 基本待機時間（2秒）
   
   let attempt = 0;
   let lastError = null;
@@ -58,6 +65,8 @@ function fetchInventoryChanges_(itemCodes) {
     attempt++;
     try {
       if (attempt > 1) {
+        // 指数バックオフによる待機時間の計算: baseDelayMs * 2^(attempt - 2)
+        const delayMs = baseDelayMs * Math.pow(2, attempt - 2);
         console.warn("一時的な接続エラーのため、" + delayMs + "ms 後に再試行します (" + (attempt - 1) + " / " + maxAttempts + " 回目)...");
         Utilities.sleep(delayMs);
       }
@@ -88,7 +97,6 @@ function fetchInventoryChanges_(itemCodes) {
       
       // すでに即時 throw されたクライアントエラー（例: 400 Bad Request や 401 Unauthorized など）はそのまま上に投げる
       if (error.message && error.message.indexOf("Supabase RPC呼び出しエラー") !== -1) {
-        // エラーメッセージに retryable なステータスコードが含まれていない場合は再スロー
         const isRetryable = error.message.includes("429") || 
                             error.message.includes("500") || 
                             error.message.includes("502") || 
