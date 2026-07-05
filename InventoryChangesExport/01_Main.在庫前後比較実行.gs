@@ -30,14 +30,7 @@ function runInventoryChangesExport() {
     // 2. 商品コードが1件も無い場合は処理を中断
     if (!itemCodes || itemCodes.length === 0) {
       console.warn("処理を中断します: 入力シートに商品コードが入力されていません。");
-      
-      try {
-        const ss = getTargetSpreadsheet();
-        ss.toast("処理を中断しました。入力シートに商品コードが入力されていません。", "処理中断", 8);
-      } catch (toastError) {
-        console.warn("トースト通知の表示に失敗しました: " + toastError.toString());
-      }
-      
+      showToastIfPossible_("処理を中断しました。入力シートに商品コードが入力されていません。", "処理中断", 8);
       console.log("=== 在庫前後比較データ出力終了 ===");
       return;
     }
@@ -58,24 +51,39 @@ function runInventoryChangesExport() {
     const elapsedTime = ((endTime.getTime() - startTime.getTime()) / 1000).toFixed(2);
     console.log("=== 在庫前後比較データ出力終了 (処理時間: " + elapsedTime + "秒) ===");
 
-    try {
-      const ss = getTargetSpreadsheet();
-      ss.toast("前後比較データ（" + data.length + "件）の出力が完了しました。(処理時間: " + elapsedTime + "秒)", "処理完了", 8);
-    } catch (toastError) {
-      console.warn("トースト通知の表示に失敗しました: " + toastError.toString());
-    }
+    showToastIfPossible_("前後比較データ（" + data.length + "件）の出力が完了しました。(処理時間: " + elapsedTime + "秒)", "処理完了", 8);
 
   } catch (error) {
     console.error("処理実行中にエラーが発生しました: " + error.toString());
-    
-    try {
-      const ss = getTargetSpreadsheet();
-      ss.toast("エラーが発生しました: " + error.message, "処理失敗", 10);
-    } catch (toastError) {
-      console.warn("トーストエラー通知の表示に失敗しました: " + toastError.toString());
-    }
-    
+    showToastIfPossible_("エラーが発生しました: " + error.message, "処理失敗", 10);
     // RPC呼び出し失敗時などのエラーをスローして実行を異常終了させる
     throw error;
+  }
+}
+
+/**
+ * 実行コンテキストがUI（スプレッドシート画面）にアクセス可能な場合のみ、トースト通知を表示する。
+ * スタンドアロン型スクリプトとして裏側でスプレッドシートを操作している場合など、
+ * UIコンテキストが存在しない環境ではエラーをスローせずにログ出力のみを行います。
+ * 
+ * @param {string} message - トーストに表示するメッセージ
+ * @param {string} title - トーストのタイトル
+ * @param {number} timeoutSeconds - トーストの表示秒数
+ * @private
+ */
+function showToastIfPossible_(message, title, timeoutSeconds) {
+  try {
+    // アクティブスプレッドシートが存在し、UI取得がエラーにならない場合のみトーストを表示
+    const activeSs = SpreadsheetApp.getActiveSpreadsheet();
+    if (activeSs) {
+      // getUi() を呼び出すことで、UI操作が可能か確認
+      SpreadsheetApp.getUi();
+      activeSs.toast(message, title, timeoutSeconds);
+    } else {
+      console.log("[Toast Skip] " + title + ": " + message);
+    }
+  } catch (e) {
+    // Cannot call showNotification などのエラーが発生した場合はキャッチして無視
+    console.log("[Toast Skip (No UI Context)] " + title + ": " + message);
   }
 }
