@@ -19,7 +19,7 @@
 function getTargetSpreadsheet() {
   const properties = PropertiesService.getScriptProperties();
   const spreadsheetId = properties.getProperty("TARGET_SPREADSHEET_ID");
-  
+
   if (spreadsheetId) {
     try {
       return SpreadsheetApp.openById(spreadsheetId);
@@ -27,7 +27,7 @@ function getTargetSpreadsheet() {
       throw new Error("スプレッドシートの取得に失敗しました (ID: " + spreadsheetId + "): " + error.toString());
     }
   }
-  
+
   // フォールバックとしてアクティブなスプレッドシートを使用
   return SpreadsheetApp.getActiveSpreadsheet();
 }
@@ -66,13 +66,13 @@ function getItemCodesFromInputSheet_() {
   const ss = getTargetSpreadsheet();
   const sheetName = getInputSheetName_();
   let sheet = ss.getSheetByName(sheetName);
-  
+
   if (!sheet) {
     throw new Error("入力元シート '" + sheetName + "' が見つかりません。");
   }
-  
+
   let lastRow = sheet.getLastRow();
-  
+
   // シートが完全に空、またはヘッダー行がない場合
   if (lastRow === 0) {
     sheet.getRange(1, 1).setValue("商品コード")
@@ -83,16 +83,16 @@ function getItemCodesFromInputSheet_() {
     console.log("入力シート '" + sheetName + "' にヘッダー「商品コード」を自動設定・装飾しました。");
     return [];
   }
-  
+
   if (lastRow < 2) {
     // 1行目にヘッダーがあるが、2行目以降にデータが無い場合
     return [];
   }
-  
+
   // A列（2行目〜最終行）の値を取得
   const values = sheet.getRange(2, 1, lastRow - 1, 1).getValues();
   const rawItemCodes = [];
-  
+
   for (let i = 0; i < values.length; i++) {
     const code = values[i][0];
     if (code !== null && code !== undefined) {
@@ -102,14 +102,14 @@ function getItemCodesFromInputSheet_() {
       }
     }
   }
-  
+
   // 重複の排除 (ES6 Setを使用)
   const uniqueItemCodes = Array.from(new Set(rawItemCodes));
-  
+
   if (rawItemCodes.length !== uniqueItemCodes.length) {
     console.log("入力データから重複する商品コードを排除しました。排除前: " + rawItemCodes.length + " 件 -> 排除後: " + uniqueItemCodes.length + " 件");
   }
-  
+
   return uniqueItemCodes;
 }
 
@@ -126,65 +126,65 @@ function writeInventoryChangesToSheet_(data) {
   const ss = getTargetSpreadsheet();
   const sheetName = getOutputSheetName_();
   const sheet = ss.getSheetByName(sheetName);
-  
+
   if (!sheet) {
     throw new Error("出力先シート '" + sheetName + "' が見つかりません。");
   }
-  
+
   // 1. ヘッダー行（1行目）の確認と自動書き込み
   const headers = ["商品コード", "記録日時", "在庫数", "在庫数_前回", "在庫数差分", "フリー在庫数", "フリー在庫数_前回", "フリー在庫数差分"];
   const lastRow = sheet.getLastRow();
-  
+
   let needsHeaderWrite = false;
   if (lastRow === 0) {
     needsHeaderWrite = true;
   } else {
     // 1行目のセルの値を取得してチェック
     const firstRowValues = sheet.getRange(1, 1, 1, headers.length).getValues()[0];
-    const isFirstRowEmpty = firstRowValues.every(function(val) {
+    const isFirstRowEmpty = firstRowValues.every(function (val) {
       return val === "" || val === null || val === undefined;
     });
     if (isFirstRowEmpty) {
       needsHeaderWrite = true;
     }
   }
-  
+
   if (needsHeaderWrite) {
     sheet.getRange(1, 1, 1, headers.length).setValues([headers]);
     console.log("出力先シート '" + sheetName + "' にヘッダーを自動設定しました。");
   }
-  
+
   // 毎回、ヘッダーに装飾（スタイリング）を適用・復元して見栄えを整える
   sheet.getRange(1, 1, 1, headers.length)
     .setBackground('#e67e22')           // オレンジ系(温かみのある色)
     .setFontColor('#ffffff')            // 白文字
     .setFontWeight('bold')              // 太字
     .setHorizontalAlignment('center');  // 中央揃え
-  
+
   // 2. 既存のデータ範囲をクリア（2行目以降すべてクリア、ヘッダーは残す）
   const currentLastRow = sheet.getLastRow();
   if (currentLastRow >= 2) {
     sheet.getRange(2, 1, currentLastRow - 1, headers.length).clearContent();
   }
-  
+
   if (!data || data.length === 0) {
     console.log("書き込むデータがありません。クリア処理のみ実行しました。");
     return;
   }
-  
+
   // 3. データを書き込み用の2次元配列に変換
-  const outputValues = data.map(function(row) {
+  const outputValues = data.map(function (row) {
     let formattedDate = "";
     if (row.occurrence_at) {
       try {
         const utcDate = new Date(row.occurrence_at);
-        formattedDate = Utilities.formatDate(utcDate, "JST", "yyyy/MM/dd HH:mm:ss");
+        formattedDate = Utilities.formatDate(utcDate, "Asia/Tokyo", "yyyy/MM/dd HH:mm:ss");
       } catch (e) {
         console.warn("日時の変換に失敗しました: " + row.occurrence_at + " | エラー: " + e.toString());
         formattedDate = row.occurrence_at; // 変換失敗時は生データを使用
       }
     }
-    
+
     return [
       row.item_code || "",
       formattedDate,
@@ -196,13 +196,13 @@ function writeInventoryChangesToSheet_(data) {
       row.diff_free_quantity !== null && row.diff_free_quantity !== undefined ? row.diff_free_quantity : ""
     ];
   });
-  
+
   // 4. 一括書き込み (案A方式)
   const startRow = 2;
   const startCol = 1;
   const numRows = outputValues.length;
   const numCols = headers.length;
-  
+
   sheet.getRange(startRow, startCol, numRows, numCols).setValues(outputValues);
   console.log("シート '" + sheetName + "' に " + numRows + " 件のデータを書き込みました。");
 }
