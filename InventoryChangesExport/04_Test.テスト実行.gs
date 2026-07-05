@@ -276,6 +276,75 @@ function test_fetchWithRetry_Failure() {
 }
 
 /**
+ * 【テスト】ステップ5-3：大量データ制限チェックの検証テスト
+ * 
+ * 一時的にスクリプトプロパティ `MAX_ITEM_LIMIT` を極端に低い上限「1件」に書き換え、
+ * 2件の商品コードを入力して処理を実行した際、制限に引っかかって安全にエラー終了するか検証します。
+ * 
+ * ### 注意
+ * このテストを実行すると、一時的にスクリプトプロパティ `MAX_ITEM_LIMIT` が「1」に設定されます。
+ * テスト終了時に自動的に元の設定（または未設定状態）に復元されます。
+ */
+function test_integration_limit_run() {
+  Logger.log("=== [Test] 大量データ制限テスト開始 ===");
+  
+  const properties = PropertiesService.getScriptProperties();
+  const originalLimit = properties.getProperty("MAX_ITEM_LIMIT");
+  
+  const ss = getTargetSpreadsheet();
+  const inputSheetName = getInputSheetName_();
+  const inputSheet = ss.getSheetByName(inputSheetName);
+  
+  if (!inputSheet) {
+    Logger.log("エラー: 入力シート '" + inputSheetName + "' が存在しません。");
+    return;
+  }
+  
+  // テスト用に2件の商品コードを入力シートにセット
+  const testCodes = [
+    ["0010-bb101p-s-gy"],
+    ["0010-bb101p-s-gf"]
+  ];
+  const lastRow = inputSheet.getLastRow();
+  if (lastRow >= 2) {
+    inputSheet.getRange(2, 1, lastRow - 1, 1).clearContent();
+  }
+  inputSheet.getRange(2, 1, testCodes.length, 1).setValues(testCodes);
+  Logger.log("入力シートにテスト用商品コードを2件セットしました。");
+  
+  try {
+    // 1. 上限値を一時的に「1」に制限
+    properties.setProperty("MAX_ITEM_LIMIT", "1");
+    Logger.log("スクリプトプロパティ 'MAX_ITEM_LIMIT' を一時的に '1' に設定しました。");
+    
+    // 2. メイン処理を呼び出し（2件 > 1件 のため、ここでバリデーションエラーとなるべき）
+    Logger.log("上限を超えた状態でメイン処理を実行します...");
+    runInventoryChangesExport();
+    
+    Logger.log("失敗: 上限を超えているにもかかわらず、エラーが発生せずに処理が終了しました。");
+  } catch (error) {
+    Logger.log("キャッチしたエラー (期待値): " + error.toString());
+    
+    if (error.message.indexOf("上限（1件）を超えています") !== -1) {
+      Logger.log("成功: 件数制限バリデーションが正常に動作し、処理が安全に遮断されました。");
+    } else {
+      Logger.log("警告: 想定外のエラーが発生しました。");
+    }
+  } finally {
+    // 3. 元の上限設定に戻す
+    if (originalLimit === null || originalLimit === undefined) {
+      properties.deleteProperty("MAX_ITEM_LIMIT");
+      Logger.log("スクリプトプロパティ 'MAX_ITEM_LIMIT' を未設定状態（デフォルト500件）に復元しました。");
+    } else {
+      properties.setProperty("MAX_ITEM_LIMIT", originalLimit);
+      Logger.log("スクリプトプロパティ 'MAX_ITEM_LIMIT' を元の設定値 '" + originalLimit + "' に復元しました。");
+    }
+  }
+  
+  Logger.log("=== [Test] 大量データ制限テスト終了 ===");
+}
+
+/**
  * 【テスト】フェーズ4：統合テスト（異常系：入力空）
  * 
  * 入力シートを空にした状態でメイン処理を実行し、エラーとならずに
