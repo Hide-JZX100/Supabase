@@ -27,7 +27,7 @@ function runInventoryChangesExport() {
   try {
     // 1. 入力シートから商品コードを取得（重複排除済み）
     const itemCodes = getItemCodesFromInputSheet_();
-    
+
     // 2. 商品コードが1件も無い場合は処理を中断
     if (!itemCodes || itemCodes.length === 0) {
       console.warn("処理を中断します: 入力シートに商品コードが入力されていません。");
@@ -75,9 +75,12 @@ function runInventoryChangesExport() {
 }
 
 /**
- * 実行コンテキストがUI（スプレッドシート画面）にアクセス可能な場合のみ、トースト通知を表示する。
- * スタンドアロン型スクリプトとして裏側でスプレッドシートを操作している場合など、
- * UIコンテキストが存在しない環境ではエラーをスローせずにログ出力のみを行います。
+ * 対象スプレッドシート（TARGET_SPREADSHEET_ID、未設定時はアクティブシート）に
+ * トースト通知を表示する。本プロジェクトは独立したスタンドアロン型GASプロジェクトのため、
+ * 対象スプレッドシートとのUI的な紐付け（コンテナバインド）が存在せず、
+ * 手動実行（GASエディタからの直接実行）では通知が届かずログ出力のみになるのが通常の挙動である。
+ * 将来的にコンテナバインド型（カスタムメニュー等）に変更した場合にのみ通知が有効になる。
+ * 何らかの理由でtoast呼び出しに失敗した場合は、エラーをスローせずにログ出力のみを行う。
  * 
  * @param {string} message - トーストに表示するメッセージ
  * @param {string} title - トーストのタイトル
@@ -86,14 +89,9 @@ function runInventoryChangesExport() {
  */
 function showToastIfPossible_(message, title, timeoutSeconds) {
   try {
-    // アクティブスプレッドシートが存在し、UI取得がエラーにならない場合のみトーストを表示
-    const activeSs = SpreadsheetApp.getActiveSpreadsheet();
-    if (activeSs) {
-      SpreadsheetApp.getUi();
-      activeSs.toast(message, title, timeoutSeconds);
-    } else {
-      console.log("[Toast Skip] " + title + ": " + message);
-    }
+    // TARGET_SPREADSHEET_IDに対して直接トーストを送信する（UIコンテキスト不要）
+    const targetSs = getTargetSpreadsheet();
+    targetSs.toast(message, title, timeoutSeconds);
   } catch (e) {
     console.log("[Toast Skip (No UI Context)] " + title + ": " + message);
   }
