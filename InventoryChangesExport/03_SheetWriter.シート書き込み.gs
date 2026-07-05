@@ -81,3 +81,73 @@ function getItemCodesFromInputSheet_() {
   return itemCodes;
 }
 
+/**
+ * 取得した在庫履歴データをシート「前後比較」へ一括書き込みする。
+ * 実行するたびに既存のデータ（2行目以降）をクリアしてから書き込みを行います。
+ * 
+ * @param {Object[]} data - Supabase RPCから取得したレコード配列
+ * @throws {Error} スプレッドシートまたは出力先シートが存在しない場合
+ */
+function writeInventoryChangesToSheet_(data) {
+  const ss = getTargetSpreadsheet_();
+  const sheetName = getOutputSheetName_();
+  const sheet = ss.getSheetByName(sheetName);
+
+  if (!sheet) {
+    throw new Error("出力先シート '" + sheetName + "' が見つかりません。");
+  }
+
+  // 1. 既存のデータ範囲をクリア（2行目以降すべてクリア、ヘッダーは残す）
+  const lastRow = sheet.getLastRow();
+  if (lastRow >= 2) {
+    sheet.getRange(2, 1, lastRow - 1, 8).clearContent();
+  }
+
+  if (!data || data.length === 0) {
+    console.log("書き込むデータがありません。クリア処理のみ実行しました。");
+    return;
+  }
+
+  // 2. データを書き込み用の2次元配列に変換
+  // 列定義：
+  // A: 商品コード (item_code)
+  // B: 記録日時 (occurrence_at -> JST)
+  // C: 在庫数 (current_quantity)
+  // D: 在庫数_前回 (prev_quantity)
+  // E: 在庫数差分 (diff_quantity)
+  // F: フリー在庫数 (current_free_quantity)
+  // G: フリー在庫数_前回 (prev_free_quantity)
+  // H: フリー在庫数差分 (diff_free_quantity)
+  const outputValues = data.map(function (row) {
+    let formattedDate = "";
+    if (row.occurrence_at) {
+      try {
+        const utcDate = new Date(row.occurrence_at);
+        formattedDate = Utilities.formatDate(utcDate, "JST", "yyyy/MM/dd HH:mm:ss");
+      } catch (e) {
+        console.warn("日時の変換に失敗しました: " + row.occurrence_at + " | エラー: " + e.toString());
+        formattedDate = row.occurrence_at; // 変換失敗時は生データを使用
+      }
+    }
+
+    return [
+      row.item_code || "",
+      formattedDate,
+      row.current_quantity !== null && row.current_quantity !== undefined ? row.current_quantity : "",
+      row.prev_quantity !== null && row.prev_quantity !== undefined ? row.prev_quantity : "",
+      row.diff_quantity !== null && row.diff_quantity !== undefined ? row.diff_quantity : "",
+      row.current_free_quantity !== null && row.current_free_quantity !== undefined ? row.current_free_quantity : "",
+      row.prev_free_quantity !== null && row.prev_free_quantity !== undefined ? row.prev_free_quantity : "",
+      row.diff_free_quantity !== null && row.diff_free_quantity !== undefined ? row.diff_free_quantity : ""
+    ];
+  });
+
+  // 3. 一括書き込み (案A方式)
+  const startRow = 2;
+  const startCol = 1;
+  const numRows = outputValues.length;
+  const numCols = 8;
+
+  sheet.getRange(startRow, startCol, numRows, numCols).setValues(outputValues);
+  console.log("シート '" + sheetName + "' に " + numRows + " 件のデータを書き込みました。");
+}
