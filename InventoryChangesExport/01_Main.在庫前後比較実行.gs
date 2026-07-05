@@ -11,10 +11,11 @@
  * 在庫前後比較データのエクスポート処理を手動実行するエントリーポイント。
  * 
  * ### 処理フロー
- * 1. シート「入力」から商品コード配列を取得します。
- * 2. 商品コードが1件も取得できない場合は、警告ログを出力し処理を中断（終了）します。
+ * 1. シート「入力」から商品コード配列を取得します（重複は自動で排除されます）。
+ * 2. 商品コードが1件も取得できない場合は、トースト通知および警告ログを出力し処理を中断します。
  * 3. SupabaseのRPC関数 `get_inventory_changes` を呼び出し、履歴データを取得します。
  * 4. 取得したデータを「前後比較」シートへ一括書き込みします。
+ * 5. 処理が正常に完了したことをスプレッドシート上でトースト通知します。
  * 
  * @throws {Error} Supabase接続・RPC呼び出しに失敗した場合、またはスプレッドシートへの書き込みでエラーが発生した場合
  */
@@ -23,12 +24,20 @@ function runInventoryChangesExport() {
   console.log("=== 在庫前後比較データ出力開始 ===");
 
   try {
-    // 1. 入力シートから商品コードを取得
+    // 1. 入力シートから商品コードを取得（重複排除済み）
     const itemCodes = getItemCodesFromInputSheet_();
     
     // 2. 商品コードが1件も無い場合は処理を中断
     if (!itemCodes || itemCodes.length === 0) {
       console.warn("処理を中断します: 入力シートに商品コードが入力されていません。");
+      
+      try {
+        const ss = getTargetSpreadsheet();
+        ss.toast("処理を中断しました。入力シートに商品コードが入力されていません。", "処理中断", 8);
+      } catch (toastError) {
+        console.warn("トースト通知の表示に失敗しました: " + toastError.toString());
+      }
+      
       console.log("=== 在庫前後比較データ出力終了 ===");
       return;
     }
@@ -44,13 +53,28 @@ function runInventoryChangesExport() {
     console.log("スプレッドシートへデータを書き込み中...");
     writeInventoryChangesToSheet_(data);
 
-    // 5. 終了ログの出力
+    // 5. 終了ログの出力とスプレッドシート上へのトースト通知
     const endTime = new Date();
     const elapsedTime = ((endTime.getTime() - startTime.getTime()) / 1000).toFixed(2);
     console.log("=== 在庫前後比較データ出力終了 (処理時間: " + elapsedTime + "秒) ===");
 
+    try {
+      const ss = getTargetSpreadsheet();
+      ss.toast("前後比較データ（" + data.length + "件）の出力が完了しました。(処理時間: " + elapsedTime + "秒)", "処理完了", 8);
+    } catch (toastError) {
+      console.warn("トースト通知の表示に失敗しました: " + toastError.toString());
+    }
+
   } catch (error) {
     console.error("処理実行中にエラーが発生しました: " + error.toString());
+    
+    try {
+      const ss = getTargetSpreadsheet();
+      ss.toast("エラーが発生しました: " + error.message, "処理失敗", 10);
+    } catch (toastError) {
+      console.warn("トーストエラー通知の表示に失敗しました: " + toastError.toString());
+    }
+    
     // RPC呼び出し失敗時などのエラーをスローして実行を異常終了させる
     throw error;
   }
