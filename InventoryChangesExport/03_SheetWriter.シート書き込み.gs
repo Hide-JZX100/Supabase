@@ -10,13 +10,13 @@
  */
 
 /**
- * 対象のスプレッドシートオブジェクトを取得する
+ * 対象のスプレッドシートオブジェクトを取得する。
  * スクリプトプロパティ `TARGET_SPREADSHEET_ID` から取得し、未設定の場合はアクティブなスプレッドシートを返します。
+ * (メイン処理など他のモジュールからも参照できるよう、パブリック関数として定義しています)
  * 
  * @return {GoogleAppsScript.Spreadsheet.Spreadsheet} スプレッドシートオブジェクト
- * @private
  */
-function getTargetSpreadsheet_() {
+function getTargetSpreadsheet() {
   const properties = PropertiesService.getScriptProperties();
   const spreadsheetId = properties.getProperty("TARGET_SPREADSHEET_ID");
   
@@ -56,14 +56,14 @@ function getOutputSheetName_() {
 
 /**
  * シート「入力」から商品コードの配列を取得する。
- * 空文字、空行を排除して取得します。
+ * 空文字、空行を排除し、さらに重複を除外した商品コード配列を取得します。
  * シートが空の場合、自動的に1行目に「商品コード」ヘッダーを書き込み、オレンジ色で装飾します。
  * 
- * @return {string[]} 商品コード의配列
+ * @return {string[]} 重複のない商品コードの配列
  * @throws {Error} スプレッドシートまたは入力シートが存在しない場合
  */
 function getItemCodesFromInputSheet_() {
-  const ss = getTargetSpreadsheet_();
+  const ss = getTargetSpreadsheet();
   const sheetName = getInputSheetName_();
   let sheet = ss.getSheetByName(sheetName);
   
@@ -91,19 +91,26 @@ function getItemCodesFromInputSheet_() {
   
   // A列（2行目〜最終行）の値を取得
   const values = sheet.getRange(2, 1, lastRow - 1, 1).getValues();
-  const itemCodes = [];
+  const rawItemCodes = [];
   
   for (let i = 0; i < values.length; i++) {
     const code = values[i][0];
     if (code !== null && code !== undefined) {
       const trimmedCode = String(code).trim();
       if (trimmedCode !== "") {
-        itemCodes.push(trimmedCode);
+        rawItemCodes.push(trimmedCode);
       }
     }
   }
   
-  return itemCodes;
+  // 重複の排除 (ES6 Setを使用)
+  const uniqueItemCodes = Array.from(new Set(rawItemCodes));
+  
+  if (rawItemCodes.length !== uniqueItemCodes.length) {
+    console.log("入力データから重複する商品コードを排除しました。排除前: " + rawItemCodes.length + " 件 -> 排除後: " + uniqueItemCodes.length + " 件");
+  }
+  
+  return uniqueItemCodes;
 }
 
 /**
@@ -116,7 +123,7 @@ function getItemCodesFromInputSheet_() {
  * @throws {Error} スプレッドシートまたは出力先シートが存在しない場合
  */
 function writeInventoryChangesToSheet_(data) {
-  const ss = getTargetSpreadsheet_();
+  const ss = getTargetSpreadsheet();
   const sheetName = getOutputSheetName_();
   const sheet = ss.getSheetByName(sheetName);
   
