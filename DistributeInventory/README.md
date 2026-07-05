@@ -16,7 +16,7 @@ Supabase の `NE_InventoryData` テーブルに蓄積された在庫情報のう
 
 ```mermaid
 graph TD
-    Sender[GetInventoryData (送信側)] -->|1. HTTP POST (Webhook)| WebApp[16_WebhookReceiver.gs<br>doPost]
+    Sender["GetInventoryData (送信側)"] -->|"1. HTTP POST (Webhook)"| WebApp[16_WebhookReceiver.gs<br>doPost]
     
     %% Webhook処理
     WebApp -->|"2. トークン検証"| Config[11_Config.gs<br>getSharedToken]
@@ -41,14 +41,14 @@ graph TD
     Main -->|"2. 前回実行日時ロード"| Repo1[14_SupabaseRepository.gs<br>loadLastExecutedAt]
     Main -->|"3. 差分データ取得"| Repo2[14_SupabaseRepository.gs<br>getChangedInventorySince]
     Repo2 -->|"HTTP GET (リトライ付き)"| Client[13_SupabaseClient.gs<br>querySupabaseTable]
-    Client -->|"4. データ取得"| Supabase[(Supabase<br>NE_InventoryData)]
+    Client -->|"4. データ取得"| Supabase["Supabase<br>NE_InventoryData"]
     
     %% 配布先ループ
     Main -->|"5. 配布先設定取得"| Config[11_Config.gs<br>getSheetConfigs]
     Config -->|"SHEET_CONFIG_X"| Main
     
     Main -->|"6. メモリ上で差分上書き/新規追記"| SheetRepo[15_SheetRepository.gs<br>updateInventoryRows]
-    SheetRepo -->|"7. 一括書き込み (setValues 1回)"| Sheets[(各配布先スプレッドシート)]
+    SheetRepo -->|"7. 一括書き込み (setValues 1回)"| Sheets["各配布先スプレッドシート"]
     
     %% エラーハンドリング・後処理
     Main -->|"8. エラー発生時に即時通知"| Mail[12_Logger.gs<br>sendErrorMail]
@@ -67,12 +67,12 @@ graph TD
     
     %% 全件取得
     Main -->|"1. 全件データ取得 (ページネーション)"| Client[13_SupabaseClient.gs<br>querySupabaseTable]
-    Client -->|"is_active = true"| Supabase[(Supabase<br>NE_InventoryData)]
+    Client -->|"is_active = true"| Supabase["Supabase<br>NE_InventoryData"]
     
     %% 初期化ループ
     Main -->|"2. 配布先設定取得"| Config[11_Config.gs<br>getSheetConfigs]
     Main -->|"3. クリア＆全件一括書き込み"| SheetRepo[15_SheetRepository.gs<br>initializeInventorySheet]
-    SheetRepo -->|"A〜M列クリア & ヘッダー装飾 & setValues"| Sheets[(各配布先スプレッドシート)]
+    SheetRepo -->|"A〜M列クリア & ヘッダー装飾 & setValues"| Sheets["各配布先スプレッドシート"]
     
     %% 後処理
     Main -->|"4. 最終実行日時更新"| Repo[14_SupabaseRepository.gs<br>saveLastExecutedAt]
