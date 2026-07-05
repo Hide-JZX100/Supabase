@@ -21,16 +21,16 @@
  */
 function test_fetchInventoryChanges() {
   const testItemCodes = ["TEST_ITEM_A", "A001"];
-  
+
   Logger.log("=== [Test] Supabase接続テスト開始 ===");
   Logger.log("テスト対象商品コード: " + JSON.stringify(testItemCodes));
-  
+
   try {
     const data = fetchInventoryChanges_(testItemCodes);
     Logger.log("データ取得成功！ 件数: " + data.length + " 件");
-    
+
     if (data.length > 0) {
-      data.forEach(function(row, index) {
+      data.forEach(function (row, index) {
         Logger.log(
           "[" + (index + 1) + "] " +
           "商品: " + row.item_code + " | " +
@@ -45,7 +45,7 @@ function test_fetchInventoryChanges() {
   } catch (error) {
     Logger.log("エラーが発生しました: " + error.toString());
   }
-  
+
   Logger.log("=== [Test] Supabase接続テスト終了 ===");
 }
 
@@ -66,14 +66,14 @@ function test_fetchInventoryChanges() {
  */
 function test_sheetOperations() {
   Logger.log("=== [Test] スプレッドシート読み書きテスト開始 ===");
-  
+
   try {
     // 1. 読み込みテスト
     Logger.log("--- 1. 入力シートからの商品コード読み込みテスト ---");
     const itemCodes = getItemCodesFromInputSheet_();
     Logger.log("読み込んだ商品コード: " + JSON.stringify(itemCodes));
     Logger.log("取得件数: " + itemCodes.length + " 件");
-    
+
     // 2. 書き込みテスト
     Logger.log("--- 2. 前後比較シートへのダミーデータ書き込みテスト ---");
     const dummyData = [
@@ -98,13 +98,13 @@ function test_sheetOperations() {
         diff_free_quantity: 0
       }
     ];
-    
+
     writeInventoryChangesToSheet_(dummyData);
     Logger.log("ダミーデータの書き込み処理が完了しました。スプレッドシートの「前後比較」シートを確認してください。");
-    
+
   } catch (error) {
     Logger.log("エラーが発生しました: " + error.toString());
   }
-  
+
   Logger.log("=== [Test] スプレッドシート読み書きテスト終了 ===");
 }
