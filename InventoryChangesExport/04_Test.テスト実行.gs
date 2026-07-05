@@ -21,16 +21,16 @@
  */
 function test_fetchInventoryChanges() {
   const testItemCodes = ["TEST_ITEM_A", "A001"];
-
+  
   Logger.log("=== [Test] Supabase接続テスト開始 ===");
   Logger.log("テスト対象商品コード: " + JSON.stringify(testItemCodes));
-
+  
   try {
     const data = fetchInventoryChanges_(testItemCodes);
     Logger.log("データ取得成功！ 件数: " + data.length + " 件");
-
+    
     if (data.length > 0) {
-      data.forEach(function (row, index) {
+      data.forEach(function(row, index) {
         Logger.log(
           "[" + (index + 1) + "] " +
           "商品: " + row.item_code + " | " +
@@ -45,7 +45,7 @@ function test_fetchInventoryChanges() {
   } catch (error) {
     Logger.log("エラーが発生しました: " + error.toString());
   }
-
+  
   Logger.log("=== [Test] Supabase接続テスト終了 ===");
 }
 
@@ -62,18 +62,19 @@ function test_fetchInventoryChanges() {
  * ### 検証手順
  * 1. GASのエディタで `test_sheetOperations` を選択して実行します。
  * 2. ログに「入力」シートから読み込んだ商品コード一覧が表示されることを確認します。
- * 3. 「前後比較」シートの2行目以降に、ダミーデータ（TEST-001, TEST-002）が正しく書き込まれることを確認します。
+ * 3. 「前後比較」シートの2行目以降に、ダミーデータ（TEST-001, TEST-002）が正しく書き込まれ、
+ *    ヘッダー行がオレンジ色で自動装飾されることを確認します。
  */
 function test_sheetOperations() {
   Logger.log("=== [Test] スプレッドシート読み書きテスト開始 ===");
-
+  
   try {
     // 1. 読み込みテスト
     Logger.log("--- 1. 入力シートからの商品コード読み込みテスト ---");
     const itemCodes = getItemCodesFromInputSheet_();
     Logger.log("読み込んだ商品コード: " + JSON.stringify(itemCodes));
     Logger.log("取得件数: " + itemCodes.length + " 件");
-
+    
     // 2. 書き込みテスト
     Logger.log("--- 2. 前後比較シートへのダミーデータ書き込みテスト ---");
     const dummyData = [
@@ -98,13 +99,107 @@ function test_sheetOperations() {
         diff_free_quantity: 0
       }
     ];
-
+    
     writeInventoryChangesToSheet_(dummyData);
     Logger.log("ダミーデータの書き込み処理が完了しました。スプレッドシートの「前後比較」シートを確認してください。");
-
+    
   } catch (error) {
     Logger.log("エラーが発生しました: " + error.toString());
   }
-
+  
   Logger.log("=== [Test] スプレッドシート読み書きテスト終了 ===");
+}
+
+/**
+ * 【テスト】フェーズ4：統合テスト（手動テストの事前準備・自動検証）
+ * 
+ * 入力シートに特定のテストデータを書き込み、メイン処理 `runInventoryChangesExport` を実行して、
+ * スプレッドシートへの出力が正しく完了するか一気通貫でテストします。
+ * 
+ * ### 事前準備
+ * 1. スクリプトプロパティ（SUPABASE_URL, SUPABASE_KEY, TARGET_SPREADSHEET_ID）を設定してください。
+ * 
+ * ### 検証手順
+ * 1. GASのエディタで `test_integration_run` を選択して実行します。
+ * 2. 処理が正常に走り、実行ログに対象件数分のログが出力されることを確認します。
+ * 3. スプレッドシートの「入力」および「前後比較」シートの内容を確認し、正しくデータが配置されていることを確認します。
+ */
+function test_integration_run() {
+  Logger.log("=== [Test] 統合テスト開始 ===");
+  
+  const ss = getTargetSpreadsheet_();
+  const inputSheetName = getInputSheetName_();
+  const inputSheet = ss.getSheetByName(inputSheetName);
+  
+  if (!inputSheet) {
+    Logger.log("エラー: 入力シート '" + inputSheetName + "' が存在しません。スプレッドシートを確認してください。");
+    return;
+  }
+  
+  // テスト用のデータを入力シートに書き込む（既存データはA2以降クリアして上書き）
+  const testCodes = [
+    ["0010-bb101p-s-gy"],
+    ["0010-bb101p-s-gf"]
+  ];
+  
+  const lastRow = inputSheet.getLastRow();
+  if (lastRow >= 2) {
+    inputSheet.getRange(2, 1, lastRow - 1, 1).clearContent();
+  }
+  
+  // テストコードのセットと装飾の自動生成
+  inputSheet.getRange(1, 1).setValue("商品コード")
+    .setBackground('#e67e22')
+    .setFontColor('#ffffff')
+    .setFontWeight('bold')
+    .setHorizontalAlignment('center');
+    
+  inputSheet.getRange(2, 1, testCodes.length, 1).setValues(testCodes);
+  Logger.log("入力シートにテスト用商品コードをセットしました: " + JSON.stringify(testCodes));
+  
+  // メイン処理の実行
+  Logger.log("メイン処理 runInventoryChangesExport を起動します...");
+  try {
+    runInventoryChangesExport();
+    Logger.log("メイン処理が正常に終了しました。「前後比較」シートのデータを確認してください。");
+  } catch (e) {
+    Logger.log("メイン処理実行中にエラーが発生しました: " + e.toString());
+  }
+  
+  Logger.log("=== [Test] 統合テスト終了 ===");
+}
+
+/**
+ * 【テスト】フェーズ4：統合テスト（異常系・入力空）
+ * 
+ * 入力シートを空にした状態でメイン処理を実行し、エラーとならずに
+ * 警告メッセージで正常に処理が中断することを確認します。
+ */
+function test_integration_empty_run() {
+  Logger.log("=== [Test] 統合テスト（異常系：入力空）開始 ===");
+  
+  const ss = getTargetSpreadsheet_();
+  const inputSheetName = getInputSheetName_();
+  const inputSheet = ss.getSheetByName(inputSheetName);
+  
+  if (!inputSheet) {
+    Logger.log("エラー: 入力シート '" + inputSheetName + "' が存在しません。");
+    return;
+  }
+  
+  // 入力データをクリア（ヘッダーのみ残す、または完全に空にする）
+  const lastRow = inputSheet.getLastRow();
+  if (lastRow >= 2) {
+    inputSheet.getRange(2, 1, lastRow - 1, 1).clearContent();
+  }
+  
+  Logger.log("入力シートの商品コードを空にしました。メイン処理を実行します...");
+  try {
+    runInventoryChangesExport();
+    Logger.log("メイン処理がエラーを投げずに終了したことを確認してください。");
+  } catch (e) {
+    Logger.log("エラー: 空データ実行時にもかかわらずエラーがスローされました: " + e.toString());
+  }
+  
+  Logger.log("=== [Test] 統合テスト（異常系：入力空）終了 ===");
 }
