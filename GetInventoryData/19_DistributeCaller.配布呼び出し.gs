@@ -1,15 +1,16 @@
 /**
  * @file 19_DistributeCaller.配布呼び出し.gs
  * @description DistributeInventory（配布側）のWeb Appを呼び出すモジュール。
- * 動的ワンタイムトリガーから呼び出され、HTTP POSTで配布処理を起動する。
+ * メイン処理（10_Main.gs）の完了直後に直接呼び出され、HTTP POSTで配布処理を起動する。
+ * Phase A（動的トリガー経由）からPhase B（直接呼び出し）へ移行し、
+ * トリガー発火の待機時間（実測1〜2分）を解消した。
  *
  * ### 依存関係
- * - 参照元: 10_Main.エントリーポイント.gs（scheduleOneTimeTriggerの呼び出し元）
- * - 参照先: 11_Config.設定管理.gs (getReceiverWebAppUrl, getSharedToken, getDistributeTriggerDelayMs)
- *           18_TriggerManager.トリガー管理.gs (cleanupFiredTrigger)
+ * - 参照元: 10_Main.エントリーポイント.gs（メイン処理完了直後に直接呼び出し）
+ * - 参照先: 11_Config.設定管理.gs (getReceiverWebAppUrl, getSharedToken)
  *
- * @version 1.0
- * @see callDistributeInventory - 動的トリガーから呼び出されるエントリーポイント
+ * @version 2.0 (Phase B: 直接呼び出し方式に変更)
+ * @see callDistributeInventory - メイン処理から直接呼び出されるエントリーポイント
  */
 
 /** リトライ設定（DistributeInventory呼び出し用） */
@@ -19,17 +20,16 @@ const DISTRIBUTE_CALLER_RETRY_CONFIG = {
 };
 
 /**
- * 動的トリガーから呼び出されるエントリーポイント関数
+ * メイン処理から直接呼び出されるエントリーポイント関数
  *
- * 10_Main.エントリーポイント.gs から scheduleOneTimeTrigger('callDistributeInventory', ...)
- * という形で登録され、指定時間後にGASのトリガー機構から自動的に呼び出される。
+ * 10_Main.エントリーポイント.gs のメイン処理（在庫更新・商品マスタ同期）完了直後に
+ * 同一実行コンテキスト内で直接呼び出される。トリガー経由の待機時間が発生しない。
  *
  * 【処理フロー】
  * 1. DistributeInventoryへ送信するペイロード（送信元・実行時刻・共有トークン）を構築する
  * 2. callDistributeInventoryWebAppWithRetry() でリトライ付きの送信を行う
  * 3. 送信が全て失敗した場合はログに記録するが、例外は握りつぶす
  *    （既存の固定時刻トリガーがフェイルセーフとして後続で配布を行うため）
- * 4. 送信の成否に関わらず、finally で cleanupFiredTrigger() を呼び出し自分自身のトリガーを削除する
  *
  * @return {void}
  */
@@ -50,8 +50,6 @@ function callDistributeInventory() {
         logError('DistributeInventoryへの呼び出しに失敗しました（リトライ含め全て失敗）: ' + error.message);
         // 既存の固定時刻トリガー（フェイルセーフ）が後続で配布を行うため、ここでは握りつぶして継続する
 
-    } finally {
-        cleanupFiredTrigger();
     }
 }
 
