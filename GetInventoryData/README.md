@@ -42,8 +42,7 @@ graph TD
     
     %% 動的トリガー・自己スケジューリング
     Main -->|7. 翌日トリガー設定| TriggerMgr[トリガー設定.gs<br>setTriggerForGoodsMaster]
-    Main -->|8. 配布側連携| TriggerMgr2[18_TriggerManager.トリガー管理.gs<br>scheduleOneTimeTrigger]
-    TriggerMgr2 -->|動的ワンタイムトリガー作成| DistTrigger[動的トリガー<br>callDistributeInventory]
+    Main -->|8. 配布側連携| Caller[19_DistributeCaller.配布呼び出し.gs<br>callDistributeInventory]
 ```
 
 ### B. 在庫情報リアルタイム更新フロー (updateInventoryDataBatchWithRetry)
@@ -75,19 +74,16 @@ graph TD
     SSRepo2 -->|書込| LogSheets[(エラーログシート / リトライログシート)]
     
     %% 配布側連携
-    Main -->|6. 配布側連携| TriggerMgr[18_TriggerManager.トリガー管理.gs<br>scheduleOneTimeTrigger]
-    TriggerMgr -->|動的ワンタイムトリガー作成| DistTrigger[動的トリガー<br>callDistributeInventory]
+    Main -->|6. 配布側連携| Caller[19_DistributeCaller.配布呼び出し.gs<br>callDistributeInventory]
 ```
 
-### C. 配布側 (DistributeInventory) への動的ワンタイムトリガー連携
-同期・更新完了後、即時（デフォルト30秒後）に実行されるワンタイムトリガーを作成し、配布プロジェクトの Web App（Webhook）を呼び出して処理を連動させます。
+### C. 配布側 (DistributeInventory) への直接連携
+同期・更新完了後、待機時間を挟まずに配布プロジェクトの Web App（Webhook）を直接呼び出して処理を連動させます。
 
 ```mermaid
 graph TD
-    DistTrigger[動的トリガー<br>callDistributeInventory] -->|発火| Caller[19_DistributeCaller.配布呼び出し.gs<br>callDistributeInventory]
+    Main[10_Main.エントリーポイント.gs] -->|直接呼び出し| Caller[19_DistributeCaller.配布呼び出し.gs<br>callDistributeInventory]
     Caller -->|"HTTP POST (リトライ付き)"| DistApp[配布側 Web App<br>DistributeInventory]
-    Caller -->|処理完了後| TriggerMgr[18_TriggerManager.トリガー管理.gs<br>cleanupFiredTrigger]
-    TriggerMgr -->|トリガー自己削除| ProjectTriggers[GAS プロジェクトトリガー]
 ```
 
 ---
@@ -122,8 +118,8 @@ Mermaidダイアグラムが正しく表示されない環境（ローカルプ�
    ├── 7. 実行タイムスタンプ記録 (15_SpreadsheetRepository.gs: recordExecutionTimestamp)
    │    └── 指定ログシートのA1セルに実行日時を記録
    │
-   ├── 8. 配布側 (DistributeInventory) への連携 (18_TriggerManager.gs)
-   │    └── 30秒後（デフォルト）に起動するワンタイムトリガー `callDistributeInventory` を設定
+   ├── 8. 配布側 (DistributeInventory) への直接連携 (19_DistributeCaller.gs: callDistributeInventory)
+   │    └── HTTP POST で配布側 Web App を直接呼び出し
    │
    └── 9. 翌日トリガーの自動登録 (トリガー設定.gs: setTriggerForGoodsMaster)
         └── 翌日の 0:05 に実行するトリガーを自動登録（自己スケジューリング）
@@ -150,8 +146,8 @@ Mermaidダイアグラムが正しく表示されない環境（ローカルプ�
    │
    ├── 7. 実行タイムスタンプ記録 (15_SpreadsheetRepository.gs: recordExecutionTimestamp)
    │
-   └── 8. 配布側 (DistributeInventory) への連携 (18_TriggerManager.gs)
-        └── 30秒後（デフォルト）に起動するワンタイムトリガー `callDistributeInventory` を設定
+   └── 8. 配布側 (DistributeInventory) への直接連携 (19_DistributeCaller.gs: callDistributeInventory)
+        └── HTTP POST で配布側 Web App を直接呼び出し
 ```
 
 ---
@@ -179,8 +175,8 @@ Mermaidダイアグラムが正しく表示されない環境（ローカルプ�
 - `saveLastExecutedAt()` / `loadLastExecutedAt()` で前回実行日時を管理
 - 将来の外部連携・通知処理の基盤として利用可能
 
-### 4. 配布側（DistributeInventory）への動的ワンタイムトリガー連携
-在庫情報一括更新（`updateInventoryDataBatchWithRetry`）および商品マスタ同期（`updateInventoryDataFromGoodsMaster`）の完了後に、動的ワンタイムトリガーを生成し、指定時間（デフォルト30秒）経過後に配布側プロジェクトの Web App（Webhook）を呼び出します。これにより、従来の固定5分後起動スケジュールに依存せず、よりリアルタイム性の高い在庫情報の配布を実現します。
+### 4. 配布側（DistributeInventory）への直接連携
+在庫情報一括更新（`updateInventoryDataBatchWithRetry`）および商品マスタ同期（`updateInventoryDataFromGoodsMaster`）の完了直後に、配布側プロジェクトの Web App（Webhook）を直接呼び出します。動的トリガーによる待機時間（実測1〜2分）が完全に排除され、より高速でリアルタイム性の高い在庫情報の配布を実現します。
 
 ---
 
@@ -318,7 +314,7 @@ Mermaidダイアグラムが正しく表示されない環境（ローカルプ�
 
 ### [19_DistributeCaller.配布呼び出し.gs]
 * **`callDistributeInventory()`**
-  * **説明**: 動的トリガー発火時に呼び出されるラッパー関数。配布側 Web App に POST を送信したのち、必ずトリガーのクリーンアップを実行します。
+  * **説明**: メイン処理の完了後に直接呼び出されるエントリーポイント関数。配布側 Web App に POST を送信します。
 * **`callDistributeInventoryWebAppWithRetry(payload)`**
   * **説明**: 認証用トークンおよび実行時刻を含むペイロードを、最大3回のエクスポネンシャルバックオフ付きで配布側 Web App (Webhook) に送信します。
 
@@ -476,9 +472,9 @@ GAS エディタの「プロジェクトの設定」 ＞ 「スクリプトプ�
 3. **PropertiesService の書き込み制限（クォータ節約）**
    - ネクストエンジン API はレスポンスのたびに新しいトークンを返す仕様ですが、値に変更がない場合はプロパティの書き込みを自動でスキップします。これにより、GASの PropertiesService の書き込み制限エラーを回避します。
 
-4. **動的ワンタイムトリガーによる配布自動連動**
-   - 在庫同期や商品マスタ更新の終了時、配布側（DistributeInventory）の Web App を即時呼び出します。
-   - 同期処理自体が長引くことがあるため、固定時間トリガーではなく、処理が「完了した瞬間」から30秒後（デフォルト）に発火するワンタイムトリガーを動的に作成します。また、発火後は自分自身のトリガーを自動でクリーンアップ（自己削除）します。
+4. **直接呼び出しによる配布自動連動（待機時間の解消）**
+   - 在庫同期や商品マスタ更新の終了時、配布側（DistributeInventory）の Web App Webhook を同期的に直接呼び出します。
+   - 以前は処理完了後に動的ワンタイムトリガーを作成して30秒の猶予を持たせていましたが、トリガーの発火自体にGASの都合で1〜2分の余分な待機時間が発生していました。今回の直接呼び出し化により、この待機時間を完全に排除し、即時の配布連動を実現しています。
 
 5. **自動で翌日分のトリガーを再構築する自己スケジューリング**
    - 毎日 0:05 の商品マスタ同期完了時に、翌日の 0:05 に実行するトリガーを自動的に作成し直します。これにより、手動でのスケジュール管理ミスを防止します。

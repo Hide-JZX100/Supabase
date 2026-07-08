@@ -265,8 +265,8 @@ function updateInventoryDataBatchWithRetry() {
 
         recordExecutionTimestamp();
 
-        // 動的トリガーでDistributeInventoryの配布処理を呼び出す（Phase A）
-        scheduleOneTimeTrigger('callDistributeInventory', getDistributeTriggerDelayMs());
+        // DistributeInventoryの配布処理を直接呼び出す（Phase B: トリガー待機を廃止）
+        callDistributeInventory();
 
     } catch (error) {
         logError('一括更新エラー:', error.message);
@@ -394,8 +394,8 @@ function updateInventoryDataFromGoodsMaster() {
         // Step 6: 実行タイムスタンプ記録
         recordExecutionTimestamp();
 
-        // Step 6b: 動的トリガーでDistributeInventoryの配布処理を呼び出す（Phase A）
-        scheduleOneTimeTrigger('callDistributeInventory', getDistributeTriggerDelayMs());
+        // Step 6b: DistributeInventoryの配布処理を直接呼び出す（Phase B: トリガー待機を廃止）
+        callDistributeInventory();
 
         // Step 7: 翌日分のトリガーを自動登録（自己スケジューリング）
         setTriggerForGoodsMaster();
