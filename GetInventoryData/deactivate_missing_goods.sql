@@ -10,14 +10,14 @@
 --   - INT: 非活性化（is_active = false に更新）されたレコードの総数
 --
 -- 処理フロー:
---   1. NE_InventoryData テーブルにおいて、以下の条件に合致するレコードを抽出
+--   1. ne_inventory_data テーブルにおいて、以下の条件に合致するレコードを抽出
 --      - 商品コードが引数 active_codes に含まれていない
 --      - 現在 is_active が true である
 --   2. 該当レコードの is_active を false に更新
 --   3. 更新された行数を取得し、戻り値として返却する
 --
 -- 修正履歴:
--- - 2026-06-25: ネクストエンジンからの更新に合わせ、変更点をヒストリーテーブル（NE_InventoryHistory）へ保存する処理を追加
+-- - 2026-06-25: ネクストエンジンからの更新に合わせ、変更点をヒストリーテーブル（ne_inventory_history）へ保存する処理を追加
 -- =========================================================================
 CREATE OR REPLACE FUNCTION public.deactivate_missing_goods(active_codes TEXT[])
 RETURNS INT AS $$
@@ -31,14 +31,14 @@ BEGIN
 
   -- 更新処理
   WITH deactivated AS (
-      UPDATE public."NE_InventoryData"
+      UPDATE public.ne_inventory_data
       SET "is_active" = false,  
           "更新日時" = NOW()
       WHERE "商品コード" != ALL(active_codes)
         AND "is_active" = true
-      RETURNING "NE_InventoryData".*
+      RETURNING ne_inventory_data.*
   )
-  INSERT INTO public."NE_InventoryHistory" (
+  INSERT INTO public.ne_inventory_history (
       "商品コード", "商品名", "在庫数", "引当数", "フリー在庫数",
       "予約在庫数", "予約引当数", "予約フリー在庫数", "不良在庫数",
       "発注残数", "欠品数", "JANコード", "更新日時", "is_active"
