@@ -1,6 +1,6 @@
 -- =================================================================
 -- ファイル名: sql/inventory_lag_check.sql
--- 目的: NE_InventoryHistory におけるLAG関数を用いた在庫前後比較の検証
+-- 目的: ne_inventory_history におけるLAG関数を用いた在庫前後比較の検証
 -- 変更履歴:
 --   2026-06-28: 新規作成（単一商品、フリー在庫、JST変換追加）
 --   2026-06-28: 複数商品対応（PARTITION BY のリセット挙動検証を追加）
@@ -22,7 +22,7 @@ SELECT
         ORDER BY "記録日時" ASC
     ) AS "フリー在庫数_前回"
 FROM 
-    "NE_InventoryHistory"
+    ne_inventory_history
 WHERE 
     "商品コード" IN ('A001', 'もう一つ別のテスト用商品コード') -- ※実在する別コードに差し替えてください
 ORDER BY 
