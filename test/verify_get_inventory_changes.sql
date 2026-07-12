@@ -12,9 +12,9 @@
 BEGIN;
 
 -- 1. テストデータの作成
--- NE_InventoryHistory テーブルに、検証用の架空の商品（TEST_ITEM_A）の履歴データを時系列順に挿入します。
+-- ne_inventory_history テーブルに、検証用の架空の商品（TEST_ITEM_A）の履歴データを時系列順に挿入します。
 -- ※ 記録日時は JST タイムゾーンで挿入します。
-INSERT INTO "NE_InventoryHistory" (
+INSERT INTO ne_inventory_history (
     "商品コード", 
     "商品名", 
     "記録日時", 
