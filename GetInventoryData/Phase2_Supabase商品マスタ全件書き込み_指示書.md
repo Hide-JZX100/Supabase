@@ -394,7 +394,7 @@ function testUpsertInventoryToSupabase() {
         console.log(`成功         : ${result.success ? '✓' : '✗'}`);
 
         console.log('\n【Supabaseダッシュボードで以下を確認してください】');
-        console.log('Table Editor → NE_InventoryData');
+        console.log('Table Editor → ne_inventory_data');
         console.log('上記商品コードのデータが更新されているか確認してください。');
 
     } catch (error) {
@@ -482,7 +482,7 @@ callSupabaseRpc('upsert_ne_inventory_data', {
 - [ ] `10_Main.エントリーポイント.gs` に Step 5b が追記されている
 - [ ] `testBuildSupabasePayload()` を実行して変換結果が正しいことを目視確認できる
 - [ ] `testUpsertInventoryToSupabase()` を実行してステータスコード 204 が返ること
-- [ ] Supabase ダッシュボードの `NE_InventoryData` テーブルにデータが書き込まれていること
+- [ ] Supabase ダッシュボードの `ne_inventory_data` テーブルにデータが書き込まれていること
 - [ ] `更新日時` 列が正しくセットされていること
 - [ ] 既存ファイルのロジックが変更されていないこと（`10_Main` は追記のみ）
 

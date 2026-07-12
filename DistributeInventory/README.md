@@ -1,6 +1,6 @@
 # 在庫情報配布システム (DistributeInventory)
 
-Supabase の `NE_InventoryData` テーブルに蓄積された在庫情報のうち、**有効な商品（`is_active = true`）の差分**を抽出し、指定された複数の社内確認用スプレッドシートに対して、商品コードで紐付けた「上書き更新（存在しない場合は末尾追記）」を行う Google Apps Script (GAS) プロジェクトです。
+Supabase の `ne_inventory_data` テーブルに蓄積された在庫情報のうち、**有効な商品（`is_active = true`）の差分**を抽出し、指定された複数の社内確認用スプレッドシートに対して、商品コードで紐付けた「上書き更新（存在しない場合は末尾追記）」を行う Google Apps Script (GAS) プロジェクトです。
 
 > [!NOTE]
 > ネクストエンジン側で削除・非表示となり、Supabase 側で非活性化（`is_active = false`）された商品は同期対象外となります。すでにスプレッドシートに同期済みの商品を消去したい場合は、手動で `initializeAllSheets`（全件初期化）を実行することで、有効な商品のみに再構成されます。
@@ -41,7 +41,7 @@ graph TD
     Main -->|"2. 前回実行日時ロード"| Repo1[14_SupabaseRepository.gs<br>loadLastExecutedAt]
     Main -->|"3. 差分データ取得"| Repo2[14_SupabaseRepository.gs<br>getChangedInventorySince]
     Repo2 -->|"HTTP GET (リトライ付き)"| Client[13_SupabaseClient.gs<br>querySupabaseTable]
-    Client -->|"4. データ取得"| Supabase["Supabase<br>NE_InventoryData"]
+    Client -->|"4. データ取得"| Supabase["Supabase<br>ne_inventory_data"]
     
     %% 配布先ループ
     Main -->|"5. 配布先設定取得"| Config[11_Config.gs<br>getSheetConfigs]
@@ -67,7 +67,7 @@ graph TD
     
     %% 全件取得
     Main -->|"1. 全件データ取得 (ページネーション)"| Client[13_SupabaseClient.gs<br>querySupabaseTable]
-    Client -->|"is_active = true"| Supabase["Supabase<br>NE_InventoryData"]
+    Client -->|"is_active = true"| Supabase["Supabase<br>ne_inventory_data"]
     
     %% 初期化ループ
     Main -->|"2. 配布先設定取得"| Config[11_Config.gs<br>getSheetConfigs]
