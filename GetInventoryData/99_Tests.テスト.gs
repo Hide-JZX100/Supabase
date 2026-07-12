@@ -903,7 +903,7 @@ function testSupabaseRpcCall() {
         console.log(`ステータスコード: ${result.statusCode}`);
         console.log(`レスポンス内容  : ${result.body}`);
         console.log('✅ Supabase RPC 呼び出しテストに成功しました！');
-        console.log('⚠️ 実行後に Supabase ダッシュボードで "NE_InventoryData" テーブルを確認し、');
+        console.log('⚠️ 実行後に Supabase ダッシュボードで "ne_inventory_data" テーブルを確認し、');
         console.log('   "TEST-ITEM-001" が正しく書き込まれている（または更新されている）ことを確認してください。');
         
     } catch (error) {
@@ -1027,7 +1027,7 @@ function testUpsertInventoryToSupabase() {
         console.log(`成功         : ${result.success ? '✓' : '✗'}`);
 
         console.log('\n【Supabaseダッシュボードで以下を確認してください】');
-        console.log('Table Editor → NE_InventoryData');
+        console.log('Table Editor → ne_inventory_data');
         console.log('上記商品コードのデータが更新されているか確認してください。');
 
     } catch (error) {
@@ -1132,7 +1132,7 @@ function testUpsertStockToSupabase() {
         console.log(`成功        : ${result.success ? '✓' : '✗'}`);
 
         console.log('\n【Supabaseダッシュボードで以下を確認してください】');
-        console.log('Table Editor → NE_InventoryData');
+        console.log('Table Editor → ne_inventory_data');
         console.log('上記商品コードの在庫数が更新されているか確認してください。');
         console.log('商品名・JANコードが変わっていないことも確認してください。');
         console.log('在庫数が変化していない商品は 更新日時 が変わっていないはずです。');
@@ -1150,7 +1150,7 @@ function testUpsertStockToSupabase() {
  *
  * 【処理フロー】
  * 1. 1時間前の日時を計算し、ISO 8601 形式の文字列を作成
- * 2. querySupabaseTable() を使用して 'NE_InventoryData' テーブルから該当レコードをクエリ
+ * 2. querySupabaseTable() を使用して 'ne_inventory_data' テーブルから該当レコードをクエリ
  * 3. ステータスコードが200であること、および返却データ形式が配列であることを検証
  * 4. 結果をコンソールにログ出力
  */
@@ -1160,7 +1160,7 @@ function testQuerySupabaseTable() {
         const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000).toISOString();
         console.log('検索条件: 更新日時 >= ' + oneHourAgo);
 
-        const result = querySupabaseTable('NE_InventoryData', {
+        const result = querySupabaseTable('ne_inventory_data', {
             '更新日時': 'gte.' + oneHourAgo,
             'limit': '5'
         });
@@ -1340,4 +1340,34 @@ function testDistributeTriggerEndToEnd() {
     }
 
     console.log('=== testDistributeTriggerEndToEnd 終了 ===');
+}
+
+/**
+ * 【テスト】小文字テーブルへの接続・アクセス検証
+ * @description 変更後の小文字テーブル（ne_inventory_data および ne_inventory_history）に対して正常にクエリや取得ができるかを検証します。
+ * @return {void}
+ */
+function testLowercaseTableAccess() {
+  console.log('=== テスト: 小文字テーブル接続・アクセス検証 ===\n');
+
+  try {
+    console.log('1. ne_inventory_data テーブルから1件取得を試みます...');
+    const resultData = querySupabaseTable('ne_inventory_data', { 'limit': '1' });
+    console.log('ne_inventory_data 取得成功フラグ: ' + resultData.success);
+    if (resultData.success && resultData.data) {
+      console.log('  取得件数: ' + resultData.data.length + ' 件');
+    }
+
+    console.log('\n2. ne_inventory_history テーブルから1件取得を試みます...');
+    const resultHistory = querySupabaseTable('ne_inventory_history', { 'limit': '1' });
+    console.log('ne_inventory_history 取得成功フラグ: ' + resultHistory.success);
+    if (resultHistory.success && resultHistory.data) {
+      console.log('  取得件数: ' + resultHistory.data.length + ' 件');
+    }
+
+    console.log('\n✓ 小文字テーブル接続検証完了しました。');
+  } catch (error) {
+    console.error('❌ エラー: ' + error.message);
+  }
+  console.log('\n=== テスト 完了 ===');
 }

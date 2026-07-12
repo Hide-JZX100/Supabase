@@ -269,7 +269,7 @@ function getChangedInventorySince(since) {
   logWithLevel(LOG_LEVEL.MINIMAL, '差分取得開始: ' + sinceJst + ' JST (' + sinceStr + ') 以降に更新された商品');
 
   try {
-    const result = querySupabaseTable('NE_InventoryData', {
+    const result = querySupabaseTable('ne_inventory_data', {
       '更新日時': 'gte.' + sinceStr,
       'order': '更新日時.desc',
       'limit': SUPABASE_QUERY_LIMIT.toString()

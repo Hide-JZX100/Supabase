@@ -87,7 +87,7 @@ Phase 4 では REST API の **GET リクエスト** でデータを読み取る�
 ### エンドポイントとフィルタの仕様
 
 ```
-GET {SUPABASE_URL}/rest/v1/NE_InventoryData
+GET {SUPABASE_URL}/rest/v1/ne_inventory_data
     ?更新日時=gte.{ISO8601形式の日時}
     &order=更新日時.desc
     &limit={件数上限}
@@ -166,7 +166,7 @@ const isoString = new Date().toISOString();
 RPC（書き込み）に対して、テーブルへの読み取りを担当する。
 
 **引数：**
-- `tableName` {string} — テーブル名（例: `"NE_InventoryData"`）
+- `tableName` {string} — テーブル名（例: `"ne_inventory_data"`）
 - `queryParams` {Object} — クエリパラメータのオブジェクト（後述）
 
 **返却値：** `{ success: boolean, statusCode: number, data: Array }`
@@ -175,14 +175,14 @@ RPC（書き込み）に対して、テーブルへの読み取りを担当す�
 
 ```javascript
 // 呼び出し例
-querySupabaseTable('NE_InventoryData', {
+querySupabaseTable('ne_inventory_data', {
     '更新日時': 'gte.2026-05-25T08:00:00+09:00',
     'order': '更新日時.desc',
     'limit': '1000'
 });
 
 // URLに変換されるイメージ
-// /rest/v1/NE_InventoryData?更新日時=gte.2026-05-25T08:00:00+09:00&order=更新日時.desc&limit=1000
+// /rest/v1/ne_inventory_data?更新日時=gte.2026-05-25T08:00:00+09:00&order=更新日時.desc&limit=1000
 ```
 
 **実装のポイント：**
@@ -299,7 +299,7 @@ function getChangedInventorySince(since) {
     logWithLevel(LOG_LEVEL.MINIMAL, `差分取得開始: ${sinceStr} 以降に更新された商品`);
 
     try {
-        const result = querySupabaseTable('NE_InventoryData', {
+        const result = querySupabaseTable('ne_inventory_data', {
             '更新日時': `gte.${sinceStr}`,
             'order': '更新日時.desc',
             'limit': SUPABASE_QUERY_LIMIT.toString()
@@ -439,7 +439,7 @@ function testQuerySupabaseTable() {
         console.log(`取得基準日時: ${sinceStr}`);
         console.log('Supabaseに問い合わせ中...\n');
 
-        const result = querySupabaseTable('NE_InventoryData', {
+        const result = querySupabaseTable('ne_inventory_data', {
             '更新日時': `gte.${sinceStr}`,
             'order': '更新日時.desc',
             'limit': '10'
@@ -612,7 +612,7 @@ Supabase 側での SQL 実行は不要。
 -- 確認クエリ
 SELECT indexname, indexdef
 FROM pg_indexes
-WHERE tablename = 'NE_InventoryData'
+WHERE tablename = 'ne_inventory_data'
   AND schemaname = 'public';
 ```
 
@@ -621,7 +621,7 @@ WHERE tablename = 'NE_InventoryData'
 ```sql
 -- 更新日時列へのインデックス作成
 CREATE INDEX IF NOT EXISTS idx_ne_inventory_updated_at
-    ON public."NE_InventoryData" ("更新日時" DESC);
+    ON public.ne_inventory_data ("更新日時" DESC);
 ```
 
 ---

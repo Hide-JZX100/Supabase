@@ -91,7 +91,7 @@ SQL Editor で以下を実行してから GAS の実装に進むこと。
 CREATE OR REPLACE FUNCTION public.upsert_ne_stock_data(json_data JSONB)
 RETURNS VOID AS $$
 BEGIN
-    INSERT INTO public."NE_InventoryData" (
+    INSERT INTO public.ne_inventory_data (
         "商品コード", "在庫数", "引当数", "フリー在庫数",
         "予約在庫数", "予約引当数", "予約フリー在庫数", "不良在庫数",
         "発注残数", "欠品数", "更新日時"
@@ -125,10 +125,10 @@ BEGIN
         "欠品数"           = EXCLUDED."欠品数",
         "更新日時"         = NOW()
     WHERE
-        public."NE_InventoryData"."在庫数"       IS DISTINCT FROM EXCLUDED."在庫数"  OR
-        public."NE_InventoryData"."引当数"       IS DISTINCT FROM EXCLUDED."引当数"  OR
-        public."NE_InventoryData"."フリー在庫数" IS DISTINCT FROM EXCLUDED."フリー在庫数" OR
-        public."NE_InventoryData"."欠品数"       IS DISTINCT FROM EXCLUDED."欠品数";
+        public.ne_inventory_data."在庫数"       IS DISTINCT FROM EXCLUDED."在庫数"  OR
+        public.ne_inventory_data."引当数"       IS DISTINCT FROM EXCLUDED."引当数"  OR
+        public.ne_inventory_data."フリー在庫数" IS DISTINCT FROM EXCLUDED."フリー在庫数" OR
+        public.ne_inventory_data."欠品数"       IS DISTINCT FROM EXCLUDED."欠品数";
 END;
 $$ LANGUAGE plpgsql;
 ```
@@ -438,7 +438,7 @@ function testUpsertStockToSupabase() {
         console.log(`成功        : ${result.success ? '✓' : '✗'}`);
 
         console.log('\n【Supabaseダッシュボードで以下を確認してください】');
-        console.log('Table Editor → NE_InventoryData');
+        console.log('Table Editor → ne_inventory_data');
         console.log('上記商品コードの在庫数が更新されているか確認してください。');
         console.log('商品名・JANコードが変わっていないことも確認してください。');
         console.log('在庫数が変化していない商品は 更新日時 が変わっていないはずです。');

@@ -311,7 +311,7 @@ const janCodeValue = (janCode && janCode !== '') ? parseInt(janCode, 10) : null;
 
 ### テーブル名
 ```
-public."NE_InventoryData"
+public.ne_inventory_data
 ```
 
 ### テーブル列定義
@@ -345,7 +345,7 @@ upsert_ne_inventory_data
 
 ### RPC の動作仕様
 
-- 受け取ったデータを `NE_InventoryData` テーブルに INSERT する
+- 受け取ったデータを `ne_inventory_data` テーブルに INSERT する
 - `商品コード` が既存の場合は UPDATE（UPSERT）
 - **在庫数・引当数・フリー在庫数・欠品数のいずれかに差分がある場合のみ `更新日時` を更新する**
 - 差分がない場合は `更新日時` を変更しない（過去の日時を維持する）
@@ -362,7 +362,7 @@ upsert_ne_inventory_data
 - [ ] `11_Config.設定管理.gs` に Supabase プロパティの説明コメントが追記されている
 - [ ] `99_Tests.テスト.gs` に `testSupabaseConnection()` と `testSupabaseRpcCall()` が追記されている
 - [ ] `testSupabaseRpcCall()` を実行してステータスコード 200 または 204 が返ること
-- [ ] Supabase ダッシュボードの `NE_InventoryData` テーブルにテストデータが書き込まれていること
+- [ ] Supabase ダッシュボードの `ne_inventory_data` テーブルにテストデータが書き込まれていること
 - [ ] 既存ファイルのコードが一切変更されていないこと（追記のみ）
 
 ---

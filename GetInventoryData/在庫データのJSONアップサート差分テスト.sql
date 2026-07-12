@@ -22,7 +22,7 @@ SELECT public.upsert_ne_inventory_data('[
 
 -- 3. 関数実行直後のテーブルの状態を覗き見して、正しく反映されているか確認
 SELECT "商品コード", "商品名", "在庫数", "更新日時", "JANコード"
-FROM public."NE_InventoryData"
+FROM public.ne_inventory_data
 WHERE "商品コード" = 'sikic-g01-s-20-ki';
 
 -- 4. 【最重要】すべての処理を取り消し、元の状態に戻す（本番データは一切汚れません）

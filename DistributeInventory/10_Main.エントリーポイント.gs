@@ -161,7 +161,7 @@ function initializeAllSheets() {
     const allData = [];
     let offset = 0;
     while (true) {
-      const result = querySupabaseTable('NE_InventoryData', {
+      const result = querySupabaseTable('ne_inventory_data', {
         'is_active': 'eq.true',
         'order': '商品コード.asc',
         'limit': '1000',

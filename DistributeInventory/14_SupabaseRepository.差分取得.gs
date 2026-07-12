@@ -43,7 +43,7 @@ function getChangedInventorySince(since) {
     while (true) {
       logWithLevel(LOG_LEVEL.SUMMARY, '  データ取得中... (オフセット: ' + offset + ', 上限: ' + SUPABASE_QUERY_LIMIT + ')');
 
-      const result = querySupabaseTable('NE_InventoryData', {
+      const result = querySupabaseTable('ne_inventory_data', {
         '更新日時': 'gte.' + sinceStr,
         'is_active': 'eq.true',
         'order': '更新日時.desc',

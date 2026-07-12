@@ -34,7 +34,7 @@
 /**
  * 【テスト1】Supabase 接続確認
  *
- * Supabase の NE_InventoryData テーブルから1件だけ取得して
+ * Supabase の ne_inventory_data テーブルから1件だけ取得して
  * 接続・認証が正常に機能しているか確認します。
  *
  * 【事前準備】
@@ -52,7 +52,7 @@ function testSupabaseConnection() {
   try {
     console.log('1件だけ取得してみます...');
 
-    const result = querySupabaseTable('NE_InventoryData', {
+    const result = querySupabaseTable('ne_inventory_data', {
       'limit': '1'
     });
 
@@ -70,7 +70,7 @@ function testSupabaseConnection() {
 
     } else if (result.success && result.data.length === 0) {
       console.log('⚠️ 接続は成功しましたが、データが0件です。');
-      console.log('NE_InventoryData テーブルにデータが存在するか確認してください。');
+      console.log('ne_inventory_data テーブルにデータが存在するか確認してください。');
 
     } else {
       console.log('❌ 接続に失敗しました');
@@ -205,7 +205,7 @@ function testLogLevel() {
 /**
  * 【テスト4】差分データの取得テスト
  *
- * 直近2時間前を基準日時とし、Supabase の NE_InventoryData から
+ * 直近2時間前を基準日時とし、Supabase の ne_inventory_data から
  * 更新されたデータを取得するテストです。
  *
  * 【確認ポイント】
@@ -653,7 +653,7 @@ function testIsActiveFiltering() {
 
     if (data.length === 0) {
       console.log('⚠️ 取得されたデータが 0件 のため、検証をスキップします。');
-      console.log('NE_InventoryData テーブルにデータが存在するか確認してください。');
+      console.log('ne_inventory_data テーブルにデータが存在するか確認してください。');
       return;
     }
 

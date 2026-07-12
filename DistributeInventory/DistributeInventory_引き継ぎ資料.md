@@ -16,11 +16,11 @@
   ネクストエンジン API
       ↓ GAS が定期取得
   Google スプレッドシート A（メイン・IMPORTRANGE の起点）
-  Supabase / NE_InventoryData テーブル
+  Supabase / ne_inventory_data テーブル
       ↑ 在庫変化があった商品の「更新日時」が更新される
 
 【DistributeInventory プロジェクト（新規構築）】
-  Supabase / NE_InventoryData テーブル
+  Supabase / ne_inventory_data テーブル
       ↓ getChangedInventorySince() で差分取得
   Spreadsheet B（用途別）
   Spreadsheet C（用途別）
@@ -78,7 +78,7 @@
 ### テーブル名
 
 ```
-public."NE_InventoryData"
+public.ne_inventory_data
 ```
 
 ### 列定義
@@ -320,7 +320,7 @@ SHEET_CONFIG_3  : {"id":"スプレッドシートID\\\_D","sheet":"欠品アラ�
 
 ### Supabase の実績
 
-* `NE_InventoryData` テーブル：約 3,200行
+* `ne_inventory_data` テーブル：約 3,200行
 * `upsert_ne_inventory_data` RPC：商品マスタ全件 upsert（全列更新）
 * `upsert_ne_stock_data` RPC：在庫マスタ差分 upsert（在庫数値列のみ更新）
 * 差分なし商品の `更新日時` は変更されないことを確認済み

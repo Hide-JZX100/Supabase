@@ -45,7 +45,7 @@ BEGIN
                 ORDER BY "記録日時" ASC
             )::integer AS prev_free_qty
         FROM 
-            "NE_InventoryHistory"
+            ne_inventory_history
         WHERE 
             "商品コード" = ANY(target_item_codes)
     )

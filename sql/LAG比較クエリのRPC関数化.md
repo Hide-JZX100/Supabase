@@ -1,7 +1,7 @@
 # 🛠️ 開発指示書: LAG比較クエリのRPC関数化
 
 ## 1. 背景と目的
-Issue #19 において、`NE_InventoryHistory` テーブルに対するLAG関数を用いた在庫前後比較クエリの動作確認が完了しました。
+Issue #19 において、`ne_inventory_history` テーブルに対するLAG関数を用いた在庫前後比較クエリの動作確認が完了しました。
 現状は手動でSQLを実行しているため、GASやSpreadsheetからの再利用性を高めることを目的に、パラメータ（商品コード配列）を明示的に渡せる「RPC関数（ストアドファンクション）」として固定化します。
 
 ## 2. 開発・コーディングルール
@@ -65,7 +65,7 @@ BEGIN
                 ORDER BY "記録日時" ASC
             )::integer AS prev_free_qty
         FROM 
-            "NE_InventoryHistory"
+            ne_inventory_history
         WHERE 
             "商品コード" = ANY(target_item_codes)
     )
