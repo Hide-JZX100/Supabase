@@ -75,3 +75,64 @@ function formatJstDateTime(date) {
   }
   return Utilities.formatDate(date, 'JST', 'yyyy/MM/dd HH:mm:ss');
 }
+
+// ============================================================================
+// テスト用関数
+// ============================================================================
+
+/**
+ * ログユーティリティのテスト
+ *
+ * ログレベルに応じたログ出力制御および日付フォーマット処理の動作を確認します。
+ *
+ * 【テスト手順】
+ * 1. ログレベルプロパティをバックアップ
+ * 2. ログレベルを MINIMAL (1) に設定し、SUMMARY や DETAILED のログが出力されないことを確認
+ * 3. ログレベルを DETAILED (3) に設定し、すべてのログが出力されることを確認
+ * 4. formatJstDateTime にテスト用日付を渡し、変換結果の文字列形式を確認
+ * 5. バックアップからプロパティを復元する
+ */
+function test_logUtils() {
+  const properties = PropertiesService.getScriptProperties();
+  const originalLogLevel = properties.getProperty('LOG_LEVEL');
+
+  console.log('--- test_logUtils 開始 ---');
+
+  try {
+    // 日付フォーマットのテスト
+    const testDate = new Date(2026, 6, 13, 11, 30, 0); // 2026/07/13 11:30:00
+    const formatted = formatJstDateTime(testDate);
+    if (formatted === '2026/07/13 11:30:00') {
+      console.log('✅ 日付フォーマットテスト: 成功 (' + formatted + ')');
+    } else {
+      console.error('❌ 日付フォーマットテスト: 失敗 (' + formatted + ')');
+    }
+
+    // ログレベル: MINIMAL (1) でのテスト
+    properties.setProperty('LOG_LEVEL', '1');
+    console.log('--- ログレベル1 (MINIMAL) テスト (次の2つのログのみ出力されれば成功) ---');
+    logWithLevel(LOG_LEVEL.MINIMAL, '-> [出力されるべき] MINIMALログ');
+    logWithLevel(LOG_LEVEL.SUMMARY, '-> [非表示] SUMMARYログ');
+    logWithLevel(LOG_LEVEL.DETAILED, '-> [非表示] DETAILEDログ');
+    logError('-> [出力されるべき] 常時エラーログ');
+
+    // ログレベル: DETAILED (3) でのテスト
+    properties.setProperty('LOG_LEVEL', '3');
+    console.log('--- ログレベル3 (DETAILED) テスト (次の4つすべてが出力されれば成功) ---');
+    logWithLevel(LOG_LEVEL.MINIMAL, '-> [出力されるべき] MINIMALログ');
+    logWithLevel(LOG_LEVEL.SUMMARY, '-> [出力されるべき] SUMMARYログ');
+    logWithLevel(LOG_LEVEL.DETAILED, '-> [出力されるべき] DETAILEDログ');
+    logError('-> [出力されるべき] 常時エラーログ');
+
+  } catch (error) {
+    console.error('❌ テスト中にエラーが発生しました: ' + error.message);
+  } finally {
+    // 復元
+    if (originalLogLevel) {
+      properties.setProperty('LOG_LEVEL', originalLogLevel);
+    } else {
+      properties.deleteProperty('LOG_LEVEL');
+    }
+    console.log('--- test_logUtils 終了 ---');
+  }
+}
