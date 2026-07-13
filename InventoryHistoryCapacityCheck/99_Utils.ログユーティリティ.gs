@@ -1,4 +1,22 @@
 /**
+ * @file 99_Utils.ログユーティリティ.gs
+ * @description システム全体のログ出力制御および日時フォーマットユーティリティ。
+ * すべてのログ出力はこのモジュールを経由し、LOG_LEVEL（定数）による制御を行います。
+ *
+ * ### 依存関係
+ * - **参照先**: 00_Config.設定値.gs (LOG_LEVEL, DEFAULT_LOG_LEVEL)
+ * - **参照元**: 01_CapacityChecker.容量取得とRPC呼び出し.gs, 02_Notifier.閾値判定とメール通知.gs, 03_Trigger.日付判定（防御的チェック）.gs
+ *
+ * ### 公開関数
+ * @see getCurrentLogLevel  - スクリプトプロパティから現在のログレベルを取得
+ * @see logWithLevel        - ログレベルに応じたログ出力（標準出力）
+ * @see logError            - エラーログ出力（常に出力、console.error）
+ * @see formatJstDateTime   - DateオブジェクトをJSTの文字列フォーマットに変換
+ *
+ * @version 1.0
+ */
+
+/**
  * 現在のログレベルを取得する。
  * スクリプトプロパティ「LOG_LEVEL」の値を取得し数値に変換して返す。未設定の場合は DEFAULT_LOG_LEVEL を返す。
  *
