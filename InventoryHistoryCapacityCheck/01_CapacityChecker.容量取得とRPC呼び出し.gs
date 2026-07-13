@@ -1,4 +1,19 @@
 /**
+ * @file 01_CapacityChecker.容量取得とRPC呼び出し.gs
+ * @description Supabase REST API (RPC) を呼び出し、監視対象テーブルの容量を取得するモジュール。
+ * ネットワーク障害や一時的なサーバーエラーに備え、指数バックオフによる自動リトライ機能を備えています。
+ *
+ * ### 依存関係
+ * - **参照先**: 00_Config.設定値.gs (TARGET_TABLE, RPC_FUNCTION_NAME, RETRY_CONFIG, LOG_LEVEL, getSupabaseConfig), 99_Utils.ログユーティリティ.gs (logWithLevel, logError)
+ * - **参照元**: 03_Trigger.日付判定（防御的チェック）.gs
+ *
+ * ### 公開関数
+ * @see getTableSizeMb - 指定テーブルの容量（MB）をSupabaseから取得
+ *
+ * @version 1.0
+ */
+
+/**
  * SupabaseのRPC関数を呼び出して、指定されたテーブルの容量（MB）を取得する。
  *
  * 【処理フロー】
