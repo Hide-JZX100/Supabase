@@ -57,3 +57,55 @@ function isTargetDay_(date) {
 
   return [1, 11, 21, 31].includes(day);
 }
+
+// ============================================================================
+// テスト用関数
+// ============================================================================
+
+/**
+ * isTargetDay_ 関数の動作検証テスト
+ *
+ * 様々な日付データを引き渡し、1日・11日・21日・31日は true、
+ * それ以外は false が返却されるかを検証します。
+ *
+ * 【テスト手順】
+ * 1. GASエディタで本関数を実行する。
+ * 2. ログに「✅ isTargetDay_ テスト: すべて成功」と表示されることを確認する。
+ */
+function test_isTargetDay() {
+  console.log('--- test_isTargetDay 開始 ---');
+
+  // テストケース: [年, 月(0始まり), 日, 期待する戻り値]
+  const testCases = [
+    { date: new Date(2026, 6, 1), expected: true },   // 7月1日
+    { date: new Date(2026, 6, 2), expected: false },  // 7月2日
+    { date: new Date(2026, 6, 10), expected: false }, // 7月10日
+    { date: new Date(2026, 6, 11), expected: true },  // 7月11日
+    { date: new Date(2026, 6, 21), expected: true },  // 7月21日
+    { date: new Date(2026, 6, 22), expected: false }, // 7月22日
+    { date: new Date(2026, 6, 30), expected: false }, // 7月30日
+    { date: new Date(2026, 6, 31), expected: true },  // 7月31日
+    { date: new Date(2026, 1, 28), expected: false }  // 2月28日
+  ];
+
+  let allPassed = true;
+
+  testCases.forEach((tc, idx) => {
+    const result = isTargetDay_(tc.date);
+    const dateStr = Utilities.formatDate(tc.date, 'JST', 'yyyy/MM/dd');
+    if (result === tc.expected) {
+      console.log(`✅ ケース ${idx + 1}: ${dateStr} -> 結果: ${result} (期待値通り)`);
+    } else {
+      console.error(`❌ ケース ${idx + 1}: ${dateStr} -> 結果: ${result} (期待値: ${tc.expected})`);
+      allPassed = false;
+    }
+  });
+
+  if (allPassed) {
+    console.log('✅ isTargetDay_ テスト: すべて成功');
+  } else {
+    console.error('❌ isTargetDay_ テスト: 一部失敗');
+  }
+
+  console.log('--- test_isTargetDay 終了 ---');
+}
