@@ -23,7 +23,6 @@ const RETRY_CONFIG = {
   WAIT_SECONDS: 2        // リトライ間の初期ウェイト（秒）
 };
 
-
 /**
  * Supabase接続設定（URLとAPIキー）をスクリプトプロパティから取得する。
  *
@@ -50,3 +49,66 @@ function getSupabaseConfig() {
   };
 }
 
+// ============================================================================
+// テスト用関数
+// ============================================================================
+
+/**
+ * getSupabaseConfig関数のテスト
+ *
+ * プロパティが正常にロードされるか、未設定の場合に適切なエラーがスローされるかを検証します。
+ *
+ * 【テスト手順】
+ * 1. 現状のプロパティをバックアップ
+ * 2. テスト用の値をセットして getSupabaseConfig() を呼び出し、値が一致するか確認する
+ * 3. プロパティを削除してエラーが正しくスローされるか確認する
+ * 4. バックアップからプロパティを復元する
+ */
+function test_getSupabaseConfig() {
+  const properties = PropertiesService.getScriptProperties();
+
+  // 1. バックアップ
+  const originalUrl = properties.getProperty('SUPABASE_URL');
+  const originalKey = properties.getProperty('SUPABASE_KEY');
+
+  console.log('--- test_getSupabaseConfig 開始 ---');
+
+  try {
+    // 2. 正常系テスト
+    properties.setProperty('SUPABASE_URL', 'https://test-project.supabase.co');
+    properties.setProperty('SUPABASE_KEY', 'test-anon-key-12345');
+
+    const config = getSupabaseConfig();
+    if (config.url === 'https://test-project.supabase.co' && config.key === 'test-anon-key-12345') {
+      console.log('✅ 正常系テスト: 成功（設定値が一致）');
+    } else {
+      console.error('❌ 正常系テスト: 失敗（設定値が不一致）');
+    }
+
+    // 3. 異常系テスト
+    properties.deleteProperty('SUPABASE_URL');
+    try {
+      getSupabaseConfig();
+      console.error('❌ 異常系テスト: 失敗（エラーがスローされませんでした）');
+    } catch (e) {
+      console.log('✅ 異常系テスト: 成功（期待通りエラーがスローされました: ' + e.message + '）');
+    }
+
+  } catch (error) {
+    console.error('❌ テスト実行中に予期せぬエラーが発生しました: ' + error.message);
+  } finally {
+    // 4. 復元
+    if (originalUrl) {
+      properties.setProperty('SUPABASE_URL', originalUrl);
+    } else {
+      properties.deleteProperty('SUPABASE_URL');
+    }
+
+    if (originalKey) {
+      properties.setProperty('SUPABASE_KEY', originalKey);
+    } else {
+      properties.deleteProperty('SUPABASE_KEY');
+    }
+    console.log('--- test_getSupabaseConfig 終了 ---');
+  }
+}
