@@ -77,3 +77,47 @@ Supabaseのテーブル容量が監視閾値を超過しました。以下の詳
     throw error;
   }
 }
+
+// ============================================================================
+// テスト用関数
+// ============================================================================
+
+/**
+ * checkThresholdsAndNotify および sendCapacityAlertEmail 関数のテスト
+ *
+ * 閾値を一時的にテスト用に引き下げるか、テスト用容量を仮定して、
+ * メール送信機能が正しく動作し、自分宛てにメールが届くことを確認します。
+ *
+ * 【テスト手順】
+ * 1. GASエディタで本関数を実行する。
+ * 2. メール受信ボックス（GASの実行権限を与えたアカウントのGmail）を開き、
+ *    「[Supabase容量アラート] ne_inventory_history が 3MB を超過」という件名のメールが届いているか確認する。
+ */
+function test_checkThresholdsAndNotify() {
+  console.log('--- test_checkThresholdsAndNotify 開始 ---');
+
+  try {
+    // 1. 直接 sendCapacityAlertEmail をテスト
+    console.log('1. 直接メール送信のテスト（ダミー容量 5.5MB、閾値 3MB でテスト）...');
+    sendCapacityAlertEmail(5.5, 3);
+
+    // 2. 判定ロジックを含む結合テスト（一時的に定数を置き換えることはGASではできないため、関数にダミーの容量を渡して動作を確認します）
+    console.log('2. 閾値判定ロジックのテスト (通常設定 [80, 90, 100] MB に対し、10MB / 85MB / 95MB のテスト容量で判定)...');
+
+    console.log('  -> テストA: 現在容量 10MB (どの閾値も超えないはず)');
+    checkThresholdsAndNotify(10); // ログのみでメール送信されないはず
+
+    console.log('  -> テストB: 現在容量 85MB (80MBの閾値だけ超えて1通メールが送信されるはず)');
+    checkThresholdsAndNotify(85); // 80MB超過のメールが1通送信される
+
+    console.log('  -> テストC: 現在容量 95MB (80MBと90MBの閾値を超えて2通メールが送信されるはず)');
+    checkThresholdsAndNotify(95); // 80MB, 90MB超過のメールが計2通送信される
+
+    console.log('✅ テスト実行完了。Gmailの受信ボックスを確認し、合計3通の警告メール（3MB, 80MB[2通], 90MB[1通]）が届いていることを確認してください。');
+
+  } catch (error) {
+    console.error(`❌ テスト失敗: メール送信中にエラーが発生しました。\nエラー内容: ${error.message}`);
+  }
+
+  console.log('--- test_checkThresholdsAndNotify 終了 ---');
+}
