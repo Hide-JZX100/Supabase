@@ -22,3 +22,31 @@ const RETRY_CONFIG = {
   ENABLE_RETRY: true,    // リトライの有効/無効
   WAIT_SECONDS: 2        // リトライ間の初期ウェイト（秒）
 };
+
+
+/**
+ * Supabase接続設定（URLとAPIキー）をスクリプトプロパティから取得する。
+ *
+ * 【処理フロー】
+ * 1. PropertiesServiceから'SUPABASE_URL'および'SUPABASE_KEY'を取得する。
+ * 2. どちらか一方でも存在しない場合はエラーをスローする。
+ * 3. 取得したURLとキーをオブジェクトに格納して返却する。
+ *
+ * @return {Object} { url: string, key: string } Supabase接続設定
+ * @throws {Error} 必要なスクリプトプロパティが設定されていない場合
+ */
+function getSupabaseConfig() {
+  const properties = PropertiesService.getScriptProperties();
+  const url = properties.getProperty('SUPABASE_URL');
+  const key = properties.getProperty('SUPABASE_KEY');
+
+  if (!url || !key) {
+    throw new Error('必要なスクリプトプロパティが設定されていません。「SUPABASE_URL」および「SUPABASE_KEY」を設定してください。');
+  }
+
+  return {
+    url: url,
+    key: key
+  };
+}
+
