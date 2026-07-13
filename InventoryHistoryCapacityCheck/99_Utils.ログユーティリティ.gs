@@ -59,3 +59,19 @@ function logError(message, ...args) {
     console.error(message);
   }
 }
+
+/**
+ * 日付オブジェクトをJSTの「yyyy/MM/dd HH:mm:ss」形式の文字列に変換する。
+ *
+ * 【処理フロー】
+ * 1. 渡された `date` オブジェクトに対し、Utilities.formatDateを用いてJSTタイムゾーンでフォーマットする。
+ *
+ * @param {Date} date - 変換するDateオブジェクト
+ * @return {string} フォーマットされた日付文字列 (例: "2026/07/13 11:30:00")
+ */
+function formatJstDateTime(date) {
+  if (!date || !(date instanceof Date)) {
+    date = new Date();
+  }
+  return Utilities.formatDate(date, 'JST', 'yyyy/MM/dd HH:mm:ss');
+}
