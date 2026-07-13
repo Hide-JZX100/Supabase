@@ -42,3 +42,20 @@ function logWithLevel(requiredLevel, message, ...args) {
     }
   }
 }
+
+/**
+ * エラーログを出力する（ログレベル設定に関わらず常に `console.error` で出力される）。
+ *
+ * 【処理フロー】
+ * 1. 与えられた引数に応じて、console.error() を用いてメッセージを出力する。
+ *
+ * @param {string} message - エラーメッセージ
+ * @param {...*} args - 追加の引数
+ */
+function logError(message, ...args) {
+  if (args.length > 0) {
+    console.error(message, ...args);
+  } else {
+    console.error(message);
+  }
+}
