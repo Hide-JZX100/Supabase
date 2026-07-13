@@ -1,3 +1,24 @@
+/**
+ * @file 00_Config.設定値.gs
+ * @description Supabase DB容量監視プロジェクトの定数および設定管理モジュール。
+ *
+ * ### 依存関係
+ * - **参照先**: なし
+ * - **参照元**: 01_CapacityChecker.容量取得とRPC呼び出し.gs, 02_Notifier.閾値判定とメール通知.gs, 03_Trigger.日付判定（防御的チェック）.gs
+ *
+ * ### 公開関数
+ * @see getSupabaseConfig - Supabase接続情報をスクリプトプロパティから取得
+ *
+ * ### スクリプトプロパティの設定項目
+ * | キー | 説明 |
+ * | :--- | :--- |
+ * | SUPABASE_URL | SupabaseプロジェクトのREST APIエンドポイントURL |
+ * | SUPABASE_KEY | Supabase of anon key (またはサービスロールキー) |
+ * | LOG_LEVEL | ログ出力の最小レベル（1: MINIMAL, 2: SUMMARY, 3: DETAILED） |
+ *
+ * @version 1.0
+ */
+
 // 監視設定定数
 const TARGET_TABLE = 'ne_inventory_history';
 const RPC_FUNCTION_NAME = 'get_table_size_mb';
