@@ -91,7 +91,7 @@ function formatJstDateTime(date) {
   if (!date || !(date instanceof Date)) {
     date = new Date();
   }
-  return Utilities.formatDate(date, 'JST', 'yyyy/MM/dd HH:mm:ss');
+  return Utilities.formatDate(date, Session.getScriptTimeZone(), 'yyyy/MM/dd HH:mm:ss');
 }
 
 // ============================================================================

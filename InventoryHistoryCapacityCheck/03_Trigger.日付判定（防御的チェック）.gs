@@ -60,7 +60,7 @@ function checkCapacityMain() {
  * 指定された日付オブジェクト（JST基準）が実行対象日（1の位が1の日）であるかを判定する。
  *
  * 【処理フロー】
- * 1. 日付オブジェクトからJSTタイムゾーン基準の「日」を取得する。
+ * 1. 日付オブジェクトからスクリプトのタイムゾーン基準の「日」を取得する。
  * 2. 日が 1, 11, 21, 31 のいずれかであるかをチェックする。
  * 3. 該当すれば true、それ以外は false を返す。
  *
@@ -70,8 +70,8 @@ function checkCapacityMain() {
  */
 function isTargetDay_(date) {
   // GASはタイムゾーン設定（通常Asia/Tokyo）に基づいて日付を取得するため、
-  // Utilities.formatDateで明示的にJSTの「日」を抽出してパースします。
-  const dayStr = Utilities.formatDate(date, 'JST', 'd');
+  // Utilities.formatDateでスクリプトのタイムゾーン基準の「日」を抽出してパースします。
+  const dayStr = Utilities.formatDate(date, Session.getScriptTimeZone(), 'd');
   const day = parseInt(dayStr, 10);
 
   return [1, 11, 21, 31].includes(day);
@@ -111,7 +111,7 @@ function test_isTargetDay() {
 
   testCases.forEach((tc, idx) => {
     const result = isTargetDay_(tc.date);
-    const dateStr = Utilities.formatDate(tc.date, 'JST', 'yyyy/MM/dd');
+    const dateStr = Utilities.formatDate(tc.date, Session.getScriptTimeZone(), 'yyyy/MM/dd');
     if (result === tc.expected) {
       console.log(`✅ ケース ${idx + 1}: ${dateStr} -> 結果: ${result} (期待値通り)`);
     } else {
@@ -150,7 +150,7 @@ function test_checkCapacityMain() {
   // 一時的に isTargetDay_ をダミー関数に差し替えて、強制的に実行させるテスト
   const originalIsTargetDay = isTargetDay_;
   isTargetDay_ = function (d) {
-    console.log(`[シミュレーション] 日付 ${Utilities.formatDate(d, 'JST', 'yyyy/MM/dd')} は強制的に実行対象日と見なします。`);
+    console.log(`[シミュレーション] 日付 ${Utilities.formatDate(d, Session.getScriptTimeZone(), 'yyyy/MM/dd')} は強制的に実行対象日と見なします。`);
     return true;
   };
 
