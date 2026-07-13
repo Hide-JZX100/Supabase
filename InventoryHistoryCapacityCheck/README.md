@@ -5,6 +5,39 @@
 
 将来的なデータ増加に伴うDB容量の逼迫を早期に検知し、データ退避やメンテナンスのアクションを促すための「セーフティネット」として機能します。
 
+### 1. 処理フロー
+```mermaid
+flowchart TD
+    Start([起動: 月次トリガーまたは手動]) --> CheckDay{実行日判定<br>1の位が1の日?}
+    CheckDay -- No (2日など) --> Skip([早期終了: ログ出力のみ])
+    CheckDay -- Yes --> FetchConfig[設定ロード: SUPABASE_URL / KEY]
+    FetchConfig --> CallRPC[Supabase RPC呼び出し<br>get_table_size_mb]
+    
+    CallRPC --> ParseSize{容量取得成功?}
+    ParseSize -- 成功 --> CheckThresholds{閾値判定<br>80 / 90 / 100 MB}
+    ParseSize -- 失敗 (5xxなど) --> Retry[指数バックオフリトライ<br>最大3回]
+    Retry --> CallRPC
+    
+    CheckThresholds -- 閾値以上 --> SendMail[Gmailアラート送信<br>実行ユーザー宛]
+    CheckThresholds -- 閾値未満 --> End([正常終了])
+    SendMail --> End
+```
+
+### 2. ファイル間の依存関係
+```mermaid
+graph TD
+    Trigger[03_Trigger] --> Config[00_Config]
+    Trigger --> Utils[99_Utils]
+    Trigger --> Checker[01_CapacityChecker]
+    Trigger --> Notifier[02_Notifier]
+    
+    Checker --> Config
+    Checker --> Utils
+    
+    Notifier --> Config
+    Notifier --> Utils
+```
+
 ---
 
 ## ファイル構成
