@@ -1,4 +1,23 @@
 /**
+ * @file 03_Trigger.日付判定（防御的チェック）.gs
+ * @description 定期実行トリガーや手動実行時に、実行日（JST）が対象日（1の位が1の日：1日・11日・21日・31日）
+ * であるかを検証し、対象日のみ監視処理を実行する防御的チェックモジュール（メインエントリーポイント）。
+ *
+ * ### 改善内容 (v1.0)
+ * - 月次（特定日）トリガーの手動登録運用を補完する防御的チェックを実装。
+ * - トリガー誤発火時の早期終了。
+ *
+ * ### 依存関係
+ * - **参照先**: 00_Config.設定値.gs (TARGET_TABLE, LOG_LEVEL), 99_Utils.ログユーティリティ.gs (logWithLevel, logError, formatJstDateTime), 01_CapacityChecker.容量取得とRPC呼び出し.gs (getTableSizeMb), 02_Notifier.閾値判定とメール通知.gs (checkThresholdsAndNotify)
+ * - **参照元**: なし（GASエディタ上のトリガーから直接 checkCapacityMain を指定して登録する）
+ *
+ * ### 公開関数
+ * @see checkCapacityMain - トリガー実行のメインエントリーポイント
+ *
+ * @version 1.0
+ */
+
+/**
  * 容量チェック処理のメインエントリーポイント。
  *
  * 【処理フロー】
