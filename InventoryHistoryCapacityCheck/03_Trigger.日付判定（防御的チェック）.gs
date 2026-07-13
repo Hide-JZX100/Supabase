@@ -36,3 +36,24 @@ function checkCapacityMain() {
     logWithLevel(LOG_LEVEL.MINIMAL, '=== Supabase容量チェック処理 異常終了 ===');
   }
 }
+
+/**
+ * 指定された日付オブジェクト（JST基準）が実行対象日（1の位が1の日）であるかを判定する。
+ *
+ * 【処理フロー】
+ * 1. 日付オブジェクトからJSTタイムゾーン基準の「日」を取得する。
+ * 2. 日が 1, 11, 21, 31 のいずれかであるかをチェックする。
+ * 3. 該当すれば true、それ以外は false を返す。
+ *
+ * @param {Date} date - 判定対象の日付オブジェクト
+ * @return {boolean} 対象日であれば true、それ以外は false
+ * @private
+ */
+function isTargetDay_(date) {
+  // GASはタイムゾーン設定（通常Asia/Tokyo）に基づいて日付を取得するため、
+  // Utilities.formatDateで明示的にJSTの「日」を抽出してパースします。
+  const dayStr = Utilities.formatDate(date, 'JST', 'd');
+  const day = parseInt(dayStr, 10);
+
+  return [1, 11, 21, 31].includes(day);
+}
