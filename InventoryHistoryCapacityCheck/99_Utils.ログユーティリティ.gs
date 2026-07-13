@@ -19,3 +19,26 @@ function getCurrentLogLevel() {
 
   return parseInt(logLevel, 10);
 }
+
+/**
+ * ログレベルが指定された条件を満たす場合にログを出力する。
+ *
+ * 【処理フロー】
+ * 1. getCurrentLogLevel() から現在のログレベルを取得する。
+ * 2. 現在のログレベルが指定された `requiredLevel` 以上の値であれば、console.log() を用いてメッセージを出力する。
+ *
+ * @param {number} requiredLevel - 出力に必要なログレベル
+ * @param {string} message - ログメッセージ
+ * @param {...*} args - 追加の引数（プレースホルダ用など）
+ */
+function logWithLevel(requiredLevel, message, ...args) {
+  const currentLevel = getCurrentLogLevel();
+
+  if (currentLevel >= requiredLevel) {
+    if (args.length > 0) {
+      console.log(message, ...args);
+    } else {
+      console.log(message);
+    }
+  }
+}
