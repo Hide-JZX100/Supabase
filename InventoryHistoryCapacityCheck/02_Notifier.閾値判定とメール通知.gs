@@ -1,4 +1,20 @@
 /**
+ * @file 02_Notifier.閾値判定とメール通知.gs
+ * @description 取得した容量と事前に定義された閾値（80MB / 90MB / 100MB）を比較判定し、
+ * 超過している場合にGmailAppを使用して警告メールを送信するモジュール。
+ *
+ * ### 依存関係
+ * - **参照先**: 00_Config.設定値.gs (TARGET_TABLE, CAPACITY_THRESHOLDS, FREE_CAPACITY_LIMIT_MB, LOG_LEVEL), 99_Utils.ログユーティリティ.gs (logWithLevel, logError, formatJstDateTime)
+ * - **参照元**: 03_Trigger.日付判定（防御的チェック）.gs
+ *
+ * ### 公開関数
+ * @see checkThresholdsAndNotify  - テーブル容量を評価し、必要に応じてメール通知を行う
+ * @see sendCapacityAlertEmail    - 指定した閾値の警告メールを送信する
+ *
+ * @version 1.0
+ */
+
+/**
  * テーブル容量を評価し、定義された各閾値を超過している場合に通知を送信する。
  * (重複排除は行わず、超過した閾値ごとに個別にメールを送信する)
  *
