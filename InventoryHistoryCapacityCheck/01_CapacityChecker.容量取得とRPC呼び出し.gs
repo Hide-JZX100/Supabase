@@ -99,3 +99,30 @@ function getTableSizeMb(tableName) {
   logError(`[Supabase RPC] ${finalErrorMsg}`);
   throw new Error(finalErrorMsg);
 }
+
+// ============================================================================
+// テスト用関数
+// ============================================================================
+
+/**
+ * getTableSizeMb関数の動作確認用テスト
+ *
+ * 実際のSupabaseエンドポイントに対してRPC呼び出しを行い、容量が正しく取得できるかを確認します。
+ * 本テストを実行する前に、プロジェクト設定のスクリプトプロパティに
+ * 「SUPABASE_URL」と「SUPABASE_KEY」が正しく設定されている必要があります。
+ *
+ * 【テスト手順】
+ * 1. GASエディタで本関数を実行する。
+ * 2. ログに「容量取得成功: 〇〇 MB」と出力されるか確認する。
+ */
+function test_getTableSizeMb() {
+  console.log('--- test_getTableSizeMb 開始 ---');
+  try {
+    const sizeMb = getTableSizeMb(TARGET_TABLE);
+    console.log(`✅ テスト成功: ${TARGET_TABLE} の容量は ${sizeMb} MB です。`);
+  } catch (error) {
+    console.error(`❌ テスト失敗: 容量取得中にエラーが発生しました。\nエラー内容: ${error.message}`);
+    console.error('※ スクリプトプロパティ（SUPABASE_URL, SUPABASE_KEY）が正しく設定されていること、およびSupabase側にRPC関数「get_table_size_mb」が定義されていることを確認してください。');
+  }
+  console.log('--- test_getTableSizeMb 終了 ---');
+}
