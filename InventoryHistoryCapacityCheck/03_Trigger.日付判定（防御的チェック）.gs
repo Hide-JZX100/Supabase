@@ -109,3 +109,40 @@ function test_isTargetDay() {
 
   console.log('--- test_isTargetDay 終了 ---');
 }
+
+/**
+ * checkCapacityMain 関数のテスト（全体結合テスト）
+ *
+ * 防御的日付判定により、本日の日付が対象日でなければスキップされること、
+ * 対象日であれば実際の容量確認が行われることを検証します。
+ * また、日付判定を強制的にバイパスしたテストも行います。
+ *
+ * 【テスト手順】
+ * 1. GASエディタで本関数を実行する。
+ * 2. ログを確認し、本日の日付に応じた動作（スキップまたは容量取得実行）がされていることを確認する。
+ */
+function test_checkCapacityMain() {
+  console.log('--- test_checkCapacityMain 開始 ---');
+
+  console.log('1. 通常のメイン処理呼び出しテスト（本日日付に基づく判定）:');
+  checkCapacityMain();
+
+  console.log('\n2. 対象日（11日）をシミュレートした強制実行テスト:');
+  // 一時的に isTargetDay_ をダミー関数に差し替えて、強制的に実行させるテスト
+  const originalIsTargetDay = isTargetDay_;
+  isTargetDay_ = function (d) {
+    console.log(`[シミュレーション] 日付 ${Utilities.formatDate(d, 'JST', 'yyyy/MM/dd')} は強制的に実行対象日と見なします。`);
+    return true;
+  };
+
+  try {
+    checkCapacityMain();
+  } catch (e) {
+    console.error(`強制実行テスト中にエラーが発生しました: ${e.message}`);
+  } finally {
+    // 復元
+    isTargetDay_ = originalIsTargetDay;
+  }
+
+  console.log('--- test_checkCapacityMain 終了 ---');
+}
