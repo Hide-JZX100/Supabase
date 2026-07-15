@@ -54,7 +54,7 @@ function callDistributeInventory() {
         // リトライ全滅は実行ログのみでは気づきにくいため、メールでも通知する
         const subject = '【警告】DistributeInventoryへのWebhook送信に失敗しました';
         const body = 'DistributeInventoryへのWebhook送信が、リトライを含めて全て失敗しました。\n\n' +
-            '■ 発生日時: ' + new Date().toLocaleString() + '\n' +
+            '■ 発生日時: ' + Utilities.formatDate(new Date(), 'JST', 'yyyy/MM/dd HH:mm:ss') + '\n' +
             '■ エラー内容:\n' + error.message + '\n\n' +
             '※ 固定時刻トリガー（フェイルセーフ）が後続で配布処理を行うため、' +
             '在庫データの配布自体は通常どおり完了する見込みです。\n' +
