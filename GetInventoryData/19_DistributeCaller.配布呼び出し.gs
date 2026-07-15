@@ -8,8 +8,9 @@
  * ### 依存関係
  * - 参照元: 10_Main.エントリーポイント.gs（メイン処理完了直後に直接呼び出し）
  * - 参照先: 11_Config.設定管理.gs (getReceiverWebAppUrl, getSharedToken)
+ *           12_Logger.ログ管理.gs (logError, sendErrorMail)
  *
- * @version 2.0 (Phase B: 直接呼び出し方式に変更)
+ * @version 2.1 (リトライ全滅時のメール通知を追加)
  * @see callDistributeInventory - メイン処理から直接呼び出されるエントリーポイント
  */
 
@@ -49,6 +50,17 @@ function callDistributeInventory() {
     } catch (error) {
         logError('DistributeInventoryへの呼び出しに失敗しました（リトライ含め全て失敗）: ' + error.message);
         // 既存の固定時刻トリガー（フェイルセーフ）が後続で配布を行うため、ここでは握りつぶして継続する
+
+        // リトライ全滅は実行ログのみでは気づきにくいため、メールでも通知する
+        const subject = '【警告】DistributeInventoryへのWebhook送信に失敗しました';
+        const body = 'DistributeInventoryへのWebhook送信が、リトライを含めて全て失敗しました。\n\n' +
+            '■ 発生日時: ' + Utilities.formatDate(new Date(), 'JST', 'yyyy/MM/dd HH:mm:ss') + '\n' +
+            '■ エラー内容:\n' + error.message + '\n\n' +
+            '※ 固定時刻トリガー（フェイルセーフ）が後続で配布処理を行うため、' +
+            '在庫データの配布自体は通常どおり完了する見込みです。\n' +
+            '※ ただし根本原因（Web Appのデプロイ設定、OAuth認可状態、共有トークン等）の' +
+            '確認を推奨します。';
+        sendErrorMail(subject, body);
 
     }
 }

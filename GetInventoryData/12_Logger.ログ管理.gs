@@ -36,6 +36,7 @@
  * @see resetRetryStats
  * @see recordRetryAttempt
  * @see showRetryStats
+ * @see sendErrorMail
  */
 /**
  * 現在のログレベルを取得
@@ -287,4 +288,45 @@ function showRetryStats() {
     }
 
     console.log('========================================\n');
+}
+
+// ============================================================================
+// メール通知送信
+// ============================================================================
+
+/**
+ * スクリプト所有者宛にエラー通知メールを送信する
+ *
+ * 通知先はスクリプトプロパティではなく、Session.getEffectiveUser().getEmail() で
+ * 動的に取得したスクリプト所有者のGmailアドレスとする。
+ * 時間主導型トリガー実行中は Session.getActiveUser() が空文字を返すため、
+ * 必ず getEffectiveUser() を使用すること。
+ * 送信処理自体でエラーが発生した場合は、コンソールにエラーを出力するのみとし、
+ * 呼び出し元には例外を伝播させない（無限ループ防止）。
+ *
+ * @param {string} subject - メールの件名
+ * @param {string} body    - メールの本文
+ * @return {void}
+ */
+function sendErrorMail(subject, body) {
+    try {
+        const recipient = Session.getEffectiveUser().getEmail();
+
+        if (!recipient) {
+            console.error('通知先メールアドレスが取得できなかったため、メール送信をスキップします。');
+            return;
+        }
+
+        MailApp.sendEmail({
+            to: recipient,
+            subject: subject,
+            body: body
+        });
+
+        console.log('エラー通知メールを送信しました: ' + recipient);
+
+    } catch (error) {
+        // メール送信時のエラーは無限ループを防ぐため、console.error のみで出力する
+        console.error('エラー通知メール送信中に例外が発生しました:', error.message);
+    }
 }

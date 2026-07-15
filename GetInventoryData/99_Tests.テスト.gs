@@ -1370,4 +1370,69 @@ function testLowercaseTableAccess() {
     console.error('❌ エラー: ' + error.message);
   }
   console.log('\n=== テスト 完了 ===');
+}
+
+/**
+ * sendErrorMail() の送信動作確認テスト
+ *
+ * 【確認ポイント】
+ * - Session.getEffectiveUser().getEmail() 宛にテストメールが届くこと
+ * - 件名・本文が指定通り反映されていること
+ */
+function testSendErrorMailFromDistributeCaller() {
+    console.log('=== sendErrorMail() 送信テスト ===\n');
+
+    const subject = '【テスト】DistributeInventory Webhook失敗通知テスト';
+    const body = 'このメールは testSendErrorMailFromDistributeCaller() から送信されたテストメールです。\n\n' +
+        '■ 送信日時: ' + new Date().toLocaleString() + '\n' +
+        '■ ステータス: 正常動作確認中';
+
+    sendErrorMail(subject, body);
+
+    console.log('✓ 送信処理を実行しました。受信トレイを確認してください。');
+    console.log('  宛先: ' + Session.getEffectiveUser().getEmail());
+
+    console.log('\n=== テスト完了 ===');
+}
+
+/**
+ * callDistributeInventory() のリトライ全滅シナリオ確認テスト
+ *
+ * RECEIVER_WEBAPP_URL を一時的に無効なURLへ差し替えた上で
+ * callDistributeInventory() を実行し、リトライが全滅した際に
+ * メール通知まで正しく動作するかを確認する。
+ * 元のプロパティ値を破壊しないよう、一時退避と復元を行う。
+ */
+function testCallDistributeInventoryFailureNotification() {
+    console.log('=== callDistributeInventory リトライ全滅シナリオテスト ===\n');
+
+    const properties = PropertiesService.getScriptProperties();
+    const originalUrl = properties.getProperty('RECEIVER_WEBAPP_URL');
+
+    try {
+        // 実在しないURLに差し替えて強制的に失敗させる
+        properties.setProperty('RECEIVER_WEBAPP_URL', 'https://script.google.com/macros/s/invalid_dummy_id/exec');
+
+        console.log('RECEIVER_WEBAPP_URL を一時的に無効な値へ差し替えました。');
+        console.log('callDistributeInventory() を実行します（リトライで数秒〜十数秒かかります）...\n');
+
+        callDistributeInventory();
+
+        console.log('\n✓ callDistributeInventory() の実行が完了しました。');
+        console.log('  受信トレイにエラー通知メールが届いているか確認してください。');
+
+    } catch (error) {
+        console.error('❌ 予期しない例外が発生しました: ' + error.message);
+    } finally {
+        // 元のURLを必ず復元する
+        if (originalUrl !== null) {
+            properties.setProperty('RECEIVER_WEBAPP_URL', originalUrl);
+            console.log('\nRECEIVER_WEBAPP_URL を元の値に復元しました。');
+        } else {
+            properties.deleteProperty('RECEIVER_WEBAPP_URL');
+            console.log('\n元々未設定だったため、プロパティを削除しました。');
+        }
+    }
+
+    console.log('\n=== テスト完了 ===');
 }
