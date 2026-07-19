@@ -32,7 +32,9 @@ function checkCapacityMain(targetDate) {
   logWithLevel(LOG_LEVEL.MINIMAL, '=== Supabase容量チェック処理 開始 ===');
 
   try {
-    const now = targetDate || new Date();
+    // GASのトリガー実行時にはイベントオブジェクトが暗黙的に第一引数に渡されるため、
+    // 厳密に Date オブジェクトであるか判定し、異なる場合は new Date() を使用するガード処理を入れます。
+    const now = (targetDate instanceof Date) ? targetDate : new Date();
 
     // 防御的チェック: 1の位が1の日のみ処理を続行する
     if (!isTargetDay_(now)) {
@@ -155,6 +157,20 @@ function test_checkCapacityMain() {
     checkCapacityMain(testTargetDate);
   } catch (e) {
     console.error(`強制実行テスト中にエラーが発生しました: ${e.message}`);
+  }
+
+  console.log('\n3. トリガー自動実行（ダミーのイベントオブジェクトが渡された状態）のシミュレーションテスト:');
+  const dummyEventObject = {
+    triggerUid: "1234567890",
+    authMode: "LIMITED",
+    timezone: "Asia/Tokyo"
+  };
+
+  try {
+    checkCapacityMain(dummyEventObject);
+    console.log('✅ テスト成功: イベントオブジェクトが渡された場合もエラーにならずに処理されました。');
+  } catch (e) {
+    console.error(`❌ テスト失敗: イベントオブジェクト処理中にエラーが発生しました: ${e.message}`);
   }
 
   console.log('--- test_checkCapacityMain 終了 ---');
