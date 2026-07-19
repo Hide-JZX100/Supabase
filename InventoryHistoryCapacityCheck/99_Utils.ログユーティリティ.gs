@@ -32,7 +32,9 @@ function getCurrentLogLevel() {
   const logLevel = properties.getProperty('LOG_LEVEL');
 
   if (!logLevel) {
-    return DEFAULT_LOG_LEVEL;
+    // DEFAULT_LOG_LEVEL が未定義の場合（ロード順序の変更や他プロジェクトへの移植時）は、
+    // 安全のためデフォルトのログレベル（2: SUMMARY）をフォールバックとして使用します。
+    return typeof DEFAULT_LOG_LEVEL !== 'undefined' ? DEFAULT_LOG_LEVEL : 2;
   }
 
   return parseInt(logLevel, 10);
@@ -154,3 +156,44 @@ function test_logUtils() {
     console.log('--- test_logUtils 終了 ---');
   }
 }
+
+/**
+ * getCurrentLogLevelにおける未定義フォールバック動作の検証テスト
+ *
+ * スクリプトプロパティ「LOG_LEVEL」を未設定にした状態で、
+ * 関数が例外をスローせずにデフォルト値（DEFAULT_LOG_LEVEL または 2）を
+ * 正常に返却することを確認します。
+ *
+ * 【テスト手順】
+ * 1. GASエディタで本関数を実行する。
+ * 2. ログを確認し、「✅ テスト成功: プロパティ未設定時に期待通りのログレベル (〇) が返却されました。」と出力されることを確認する。
+ */
+function test_getCurrentLogLevel_fallback() {
+  console.log('--- test_getCurrentLogLevel_fallback 開始 ---');
+  const properties = PropertiesService.getScriptProperties();
+  const originalLogLevel = properties.getProperty('LOG_LEVEL');
+
+  try {
+    // 一時的にプロパティを削除してデフォルト値の取得を発生させる
+    properties.deleteProperty('LOG_LEVEL');
+    const level = getCurrentLogLevel();
+
+    const expectedLevel = typeof DEFAULT_LOG_LEVEL !== 'undefined' ? DEFAULT_LOG_LEVEL : 2;
+    if (level === expectedLevel) {
+      console.log(`✅ テスト成功: プロパティ未設定時に期待通りのログレベル (${level}) が返却されました。`);
+    } else {
+      console.error(`❌ テスト失敗: 返却された値 (${level}) が期待値 (${expectedLevel}) と異なります。`);
+    }
+  } catch (error) {
+    console.error(`❌ テスト失敗: エラーが発生しました: ${error.message}`);
+  } finally {
+    // 復元
+    if (originalLogLevel) {
+      properties.setProperty('LOG_LEVEL', originalLogLevel);
+    } else {
+      properties.deleteProperty('LOG_LEVEL');
+    }
+    console.log('--- test_getCurrentLogLevel_fallback 終了 ---');
+  }
+}
+
