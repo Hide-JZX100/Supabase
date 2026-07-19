@@ -54,6 +54,7 @@ function getTableSizeMb(tableName) {
   const enableRetry = RETRY_CONFIG.ENABLE_RETRY;
   const initialWaitSeconds = RETRY_CONFIG.WAIT_SECONDS;
   let lastError = null;
+  let isClientError = false;
 
   logWithLevel(LOG_LEVEL.SUMMARY, `[Supabase RPC] ${tableName} の容量チェックを開始します。`);
 
@@ -83,6 +84,7 @@ function getTableSizeMb(tableName) {
 
       // 4xx クライアントエラーはリトライしない
       if (statusCode >= 400 && statusCode < 500) {
+        isClientError = true;
         logError(`[Supabase RPC] クライアントエラーのためリトライをスキップします。${errorMsg}`);
         throw new Error(errorMsg);
       }
@@ -94,7 +96,7 @@ function getTableSizeMb(tableName) {
       lastError = error;
 
       // クライアントエラー（4xx）はキャッチしてそのまま再スロー（リトライ脱出）
-      if (error.message.indexOf('ステータス: 4') !== -1) {
+      if (isClientError) {
         throw error;
       }
 
@@ -141,3 +143,33 @@ function test_getTableSizeMb() {
   }
   console.log('--- test_getTableSizeMb 終了 ---');
 }
+
+/**
+ * getTableSizeMb関数におけるクライアントエラー（4xx）発生時の動作テスト
+ *
+ * 存在しない不正なテーブル名を引き渡し、リトライループに入らずに
+ * 即座にクライアントエラーとして例外が再スローされることを検証します。
+ *
+ * 【テスト手順】
+ * 1. GASエディタで本関数を実行する。
+ * 2. ログを確認し、「リトライ〇回目...」というログが出力されず、
+ *    「✅ テスト成功: クライアントエラーを検知し、期待通り即座にエラーがスローされました」と出力されることを確認する。
+ */
+function test_getTableSizeMb_clientError() {
+  console.log('--- test_getTableSizeMb_clientError 開始 ---');
+  try {
+    // 存在しない不正なテーブル名を指定（Supabase側で4xxエラーになるようにする）
+    // （注：テーブル名のチェックがRPC関数側で行われエラーを返すことを想定）
+    getTableSizeMb('non_existent_table_name_test_123');
+    console.error('❌ テスト失敗: エラーが発生せずに処理が完了してしまいました。');
+  } catch (error) {
+    // エラーメッセージに 400 やクライアントエラーの文言が含まれているか確認
+    if (error.message.indexOf('400') !== -1 || error.message.indexOf('クライアントエラー') !== -1 || error.message.indexOf('404') !== -1) {
+      console.log(`✅ テスト成功: クライアントエラーを検知し、期待通り即座にエラーがスローされました。\nエラー内容: ${error.message}`);
+    } else {
+      console.error(`❌ テスト失敗: 想定外のエラーが発生しました: ${error.message}`);
+    }
+  }
+  console.log('--- test_getTableSizeMb_clientError 終了 ---');
+}
+
