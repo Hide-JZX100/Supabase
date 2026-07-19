@@ -26,12 +26,13 @@
  * 3. 対象日の場合は、getTableSizeMb を呼び出してテーブルサイズ（MB）を取得する。
  * 4. 取得したサイズを checkThresholdsAndNotify に渡し、閾値判定とメール送信を行う。
  * 5. 全処理をtry-catchで囲み、例外発生時は `logError` を用いてログを記録する。
+ * @param {Date} [targetDate] - 判定対象の基準となる日付オブジェクト（省略時は現在の日時を使用します。テスト用）
  */
-function checkCapacityMain() {
+function checkCapacityMain(targetDate) {
   logWithLevel(LOG_LEVEL.MINIMAL, '=== Supabase容量チェック処理 開始 ===');
 
   try {
-    const now = new Date();
+    const now = targetDate || new Date();
 
     // 防御的チェック: 1の位が1の日のみ処理を続行する
     if (!isTargetDay_(now)) {
@@ -147,20 +148,13 @@ function test_checkCapacityMain() {
   checkCapacityMain();
 
   console.log('\n2. 対象日（11日）をシミュレートした強制実行テスト:');
-  // 一時的に isTargetDay_ をダミー関数に差し替えて、強制的に実行させるテスト
-  const originalIsTargetDay = isTargetDay_;
-  isTargetDay_ = function (d) {
-    console.log(`[シミュレーション] 日付 ${Utilities.formatDate(d, Session.getScriptTimeZone(), 'yyyy/MM/dd')} は強制的に実行対象日と見なします。`);
-    return true;
-  };
+  // 引数に特定の日付オブジェクトを引き渡すことで、モンキーパッチを行わずに強制実行をシミュレートします
+  const testTargetDate = new Date(2026, 6, 11); // 7月11日（対象日）
 
   try {
-    checkCapacityMain();
+    checkCapacityMain(testTargetDate);
   } catch (e) {
     console.error(`強制実行テスト中にエラーが発生しました: ${e.message}`);
-  } finally {
-    // 復元
-    isTargetDay_ = originalIsTargetDay;
   }
 
   console.log('--- test_checkCapacityMain 終了 ---');
