@@ -28,6 +28,9 @@
  * | LOG_SHEET_NAME | 実行時間を記録するシート名 |
  * | SUPABASE_URL | SupabaseプロジェクトのURL |
  * | SUPABASE_KEY | Supabaseの anon key |
+ * | RECEIVER_WEBAPP_URL | DistributeInventory側のWeb AppデプロイURL |
+ * | API_SHARED_TOKEN | DistributeInventoryと共有する認証トークン |
+ * | DISTRIBUTE_TRIGGER_DELAY_MS | 動的トリガー発火までの遅延ms（省略時100） |
  *
  * @version 2.0 - ログ最適化版
  * @see getSpreadsheetConfig - スクリプトプロパティから設定を取得
@@ -120,6 +123,14 @@ function getStoredTokens() {
 //   SUPABASE_KEY : Supabase anon key（publishable key）
 // ============================================================================
 
+// ============================================================================
+// DistributeInventory連携設定（Phase5: 動的トリガー方式）
+// スクリプトプロパティ:
+//   RECEIVER_WEBAPP_URL         : DistributeInventory側のWeb AppデプロイURL
+//   API_SHARED_TOKEN            : DistributeInventoryと共有する認証トークン
+//   DISTRIBUTE_TRIGGER_DELAY_MS : 動的トリガー発火までの遅延ms（省略時100）
+// ============================================================================
+
 /**
  * 受信側(DistributeInventory)のWeb App URLをスクリプトプロパティから取得する
  *
@@ -159,3 +170,41 @@ function getDistributeTriggerDelayMs() {
     const value = PropertiesService.getScriptProperties().getProperty('DISTRIBUTE_TRIGGER_DELAY_MS');
     return value ? parseInt(value, 10) : 100;
 }
+
+// ============================================================================
+// テスト関数
+// ============================================================================
+
+/**
+ * Phase5追加設定（DistributeInventory連携設定）の取得検証用テスト関数
+ * 
+ * @description
+ * スクリプトプロパティから RECEIVER_WEBAPP_URL, API_SHARED_TOKEN, 
+ * DISTRIBUTE_TRIGGER_DELAY_MS を安全に取得できるかをテストログに出力して検証します。
+ */
+function test_getPhase5Config() {
+    console.log('--- Phase5 設定取得テスト開始 ---');
+    
+    // 遅延時間（デフォルト値100msの確認）
+    const delay = getDistributeTriggerDelayMs();
+    console.log('[検証] DISTRIBUTE_TRIGGER_DELAY_MS:', delay);
+
+    // Web App URL 取得確認
+    try {
+        const url = getReceiverWebAppUrl();
+        console.log('[検証] RECEIVER_WEBAPP_URL:', url);
+    } catch (e) {
+        console.log('[検証] RECEIVER_WEBAPP_URL (未設定検知):', e.message);
+    }
+
+    // 共有トークン 取得確認
+    try {
+        const token = getSharedToken();
+        console.log('[検証] API_SHARED_TOKEN:', token);
+    } catch (e) {
+        console.log('[検証] API_SHARED_TOKEN (未設定検知):', e.message);
+    }
+    
+    console.log('--- Phase5 設定取得テスト終了 ---');
+}
+
