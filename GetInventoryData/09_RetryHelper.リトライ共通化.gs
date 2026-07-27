@@ -131,25 +131,25 @@ function test_executeWithRetry() {
     }
 
     // --- テスト1: 正常系 (1回目で成功) ---
+    let callCount1 = 0;
     try {
-        let callCount = 0;
         const result = executeWithRetry(() => {
-            callCount++;
+            callCount1++;
             return 'SUCCESS';
         }, { maxRetries: 3, context: 'Test1-正常系' });
 
-        assert(result === 'SUCCESS' && callCount === 1, 'テスト1: 1回目で成功すること');
+        assert(result === 'SUCCESS' && callCount1 === 1, 'テスト1: 1回目で成功すること');
     } catch (e) {
         assert(false, `テスト1: 例外発生 - ${e.message}`);
     }
 
     // --- テスト2: リトライ成功系 (2回目で成功) ---
+    let callCount2 = 0;
+    let retryAttemptCalled2 = false;
     try {
-        let callCount = 0;
-        let retryAttemptCalled = false;
         const result = executeWithRetry(() => {
-            callCount++;
-            if (callCount === 1) {
+            callCount2++;
+            if (callCount2 === 1) {
                 throw new Error('一時的な接続障害');
             }
             return 'RETRY_SUCCESS';
@@ -157,20 +157,20 @@ function test_executeWithRetry() {
             maxRetries: 3,
             context: 'Test2-リトライ成功',
             onRetryAttempt: (attempt) => {
-                if (attempt === 2) retryAttemptCalled = true;
+                if (attempt === 2) retryAttemptCalled2 = true;
             }
         });
 
-        assert(result === 'RETRY_SUCCESS' && callCount === 2 && retryAttemptCalled, 'テスト2: 2回目の試行で成功し、コールバックが呼ばれること');
+        assert(result === 'RETRY_SUCCESS' && callCount2 === 2 && retryAttemptCalled2, 'テスト2: 2回目の試行で成功し、コールバックが呼ばれること');
     } catch (e) {
         assert(false, `テスト2: 例外発生 - ${e.message}`);
     }
 
     // --- テスト3: 即時失敗系 (isNonRetryableError) ---
+    let callCount3 = 0;
     try {
-        let callCount = 0;
         executeWithRetry(() => {
-            callCount++;
+            callCount3++;
             throw new Error('認証エラー: Token invalid');
         }, {
             maxRetries: 3,
@@ -180,35 +180,35 @@ function test_executeWithRetry() {
 
         assert(false, 'テスト3: 例外がスローされませんでした');
     } catch (e) {
-        assert(e.message.includes('認証エラー') && true, 'テスト3: 即時失敗でエラーが再スローされること');
+        assert(e.message.includes('認証エラー') && callCount3 === 1, 'テスト3: 即時失敗でエラーが再スローされること');
     }
 
     // --- テスト4: 上限失敗系 (規定回数すべて失敗) ---
-    let finalFailureCalled = false;
+    let callCount4 = 0;
+    let finalFailureCalled4 = false;
     try {
-        let callCount = 0;
         executeWithRetry(() => {
-            callCount++;
+            callCount4++;
             throw new Error('サーバーエラー 500');
         }, {
             maxRetries: 3,
             context: 'Test4-上限失敗',
             buildFailureMessage: (max, err) => `最終失敗: ${max}回試行 - ${err.message}`,
             onFinalFailure: (err) => {
-                finalFailureCalled = true;
+                finalFailureCalled4 = true;
             }
         });
 
         assert(false, 'テスト4: 例外がスローされませんでした');
     } catch (e) {
-        assert(e.message.includes('最終失敗: 3回試行') && finalFailureCalled, 'テスト4: 最大リトライ超過時に失敗メッセージが構築されonFinalFailureが呼ばれること');
+        assert(e.message.includes('最終失敗: 3回試行') && finalFailureCalled4 && callCount4 === 3, 'テスト4: 最大リトライ超過時に失敗メッセージが構築されonFinalFailureが呼ばれること');
     }
 
     // --- テスト5: enableRetry = false ---
+    let callCount5 = 0;
     try {
-        let callCount = 0;
         executeWithRetry(() => {
-            callCount++;
+            callCount5++;
             throw new Error('エラー発生');
         }, {
             maxRetries: 3,
@@ -218,7 +218,7 @@ function test_executeWithRetry() {
 
         assert(false, 'テスト5: 例外がスローされませんでした');
     } catch (e) {
-        assert(callCount === 1, 'テスト5: enableRetryがfalseの場合、リトライせず1回目で終了すること');
+        assert(callCount5 === 1, 'テスト5: enableRetryがfalseの場合、リトライせず1回目で終了すること');
     }
 
     Logger.log(`=== test_executeWithRetry 完了: 合格 ${passedCount} 件 / 失敗 ${failedCount} 件 ===`);
