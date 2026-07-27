@@ -7,7 +7,8 @@
  *
  * ### 依存関係
  * - 参照元: 10_Main.エントリーポイント.gs（メイン処理完了直後に直接呼び出し）
- * - 参照先: 11_Config.設定管理.gs (getReceiverWebAppUrl, getSharedToken)
+ * - 参照先: 09_RetryHelper.リトライ共通化.gs (executeWithRetry)
+ *           11_Config.設定管理.gs (getReceiverWebAppUrl, getSharedToken)
  *           12_Logger.ログ管理.gs (logError, sendErrorMail)
  *
  * @version 2.1 (リトライ全滅時のメール通知を追加)
@@ -131,29 +132,14 @@ function callDistributeInventoryWebApp(payload) {
  * @throws {Error} 全リトライが失敗した場合
  */
 function callDistributeInventoryWebAppWithRetry(payload) {
-    if (!DISTRIBUTE_CALLER_RETRY_CONFIG.ENABLE_RETRY) {
-        return callDistributeInventoryWebApp(payload);
-    }
-
-    let lastError = null;
-
-    for (let attempt = 1; attempt <= DISTRIBUTE_CALLER_RETRY_CONFIG.MAX_RETRIES; attempt++) {
-        try {
-            if (attempt > 1) {
-                logWithLevel(LOG_LEVEL.SUMMARY, '  リトライ ' + attempt + '/' + DISTRIBUTE_CALLER_RETRY_CONFIG.MAX_RETRIES + '回目...');
-            }
-            return callDistributeInventoryWebApp(payload);
-
-        } catch (error) {
-            lastError = error;
-            logError('  ✗ 送信エラー（試行 ' + attempt + '/' + DISTRIBUTE_CALLER_RETRY_CONFIG.MAX_RETRIES + '）: ' + error.message);
-
-            if (attempt < DISTRIBUTE_CALLER_RETRY_CONFIG.MAX_RETRIES) {
-                const waitSeconds = Math.pow(2, attempt - 1);
-                Utilities.sleep(waitSeconds * 1000);
-            }
+    return executeWithRetry(
+        () => callDistributeInventoryWebApp(payload),
+        {
+            maxRetries: DISTRIBUTE_CALLER_RETRY_CONFIG.MAX_RETRIES,
+            enableRetry: DISTRIBUTE_CALLER_RETRY_CONFIG.ENABLE_RETRY,
+            context: 'DistributeInventory送信',
+            buildFailureMessage: (maxRetries, lastError) =>
+                `DistributeInventoryへの送信に失敗しました（${maxRetries}回試行）: ${(lastError && lastError.message) ? lastError.message : lastError}`
         }
-    }
-
-    throw new Error('DistributeInventoryへの送信に失敗しました（' + DISTRIBUTE_CALLER_RETRY_CONFIG.MAX_RETRIES + '回試行）: ' + lastError.message);
+    );
 }
