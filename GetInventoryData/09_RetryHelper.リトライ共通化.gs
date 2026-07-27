@@ -184,9 +184,9 @@ function test_executeWithRetry() {
     }
 
     // --- テスト4: 上限失敗系 (規定回数すべて失敗) ---
+    let finalFailureCalled = false;
     try {
         let callCount = 0;
-        let finalFailureCalled = false;
         executeWithRetry(() => {
             callCount++;
             throw new Error('サーバーエラー 500');
