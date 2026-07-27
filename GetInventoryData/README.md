@@ -207,6 +207,7 @@ Mermaidダイアグラムが正しく表示されない環境（ローカルプ�
 | ファイル名 | 役割 |
 |---|---|
 | [00_認証ライブラリ使用必須関数.gs] | ネクストエンジン API 認証のコールバック処理とトークン初期取得 |
+| [09_RetryHelper.リトライ共通化.gs] | エクスポネンシャルバックオフによる汎用リトライ処理の共通提供 |
 | [10_Main.エントリーポイント.gs] | システム全体の実行フロー制御およびオーケストレーション |
 | [11_Config.設定管理.gs] | 定数定義、各種スクリプトプロパティ取得の共通ラッパー |
 | [12_Logger.ログ管理.gs] | ログ出力（ログレベル対応）、リトライ統計情報のグローバル管理 |
@@ -229,6 +230,11 @@ Mermaidダイアグラムが正しく表示されない環境（ローカルプ�
   * **戻り値**: `HtmlOutput`
 * **`testGenerateAuthUrl()`**
   * **説明**: ネクストエンジン API にログインして本スクリプトを許可するための認証用URLをログに出力します。
+
+### [09_RetryHelper.リトライ共通化.gs]
+* **`executeWithRetry(operationFn, options)`**
+  * **説明**: エクスポネンシャルバックオフによる汎用リトライ実行関数。13_NextEngineAPI.gs（在庫マスタAPI）と19_DistributeCaller.gs（配布側Webhook）から共通で呼び出されます。即時失敗判定・リトライ試行時コールバック・最終失敗時コールバックをoptionsで差し込める設計です。
+  * **戻り値**: `*` - `operationFn` の戻り値をそのまま返す
 
 ### [10_Main.エントリーポイント.gs]
 * **`updateInventoryDataBatchWithRetry()`**
@@ -259,7 +265,7 @@ Mermaidダイアグラムが正しく表示されない環境（ローカルプ�
 
 ### [13_NextEngineAPI.API通信.gs]
 * **`getBatchStockDataWithRetry(goodsCodeList, tokens, batchNumber, maxRetries)`**
-  * **説明**: ネクストエンジンの在庫マスタAPI (`/api_v1_master_stock/search`) を呼び出し、バッチ単位で在庫数値を取得します。一時的な接続エラー時は指数バックオフで自動再試行します。
+  * **説明**: ネクストエンジンの在庫マスタAPI (`/api_v1_master_stock/search`) を呼び出し、バッチ単位で在庫数値を取得します。一時的な接続エラー時は共通ヘルパー `09_RetryHelper.gs: executeWithRetry` 経由で指数バックオフ自動再試行します。
   * **引数**:
     - `goodsCodeList` (string[]): 検索対象の商品コード配列（最大1000件）
     - `tokens` (Object): 認証トークン
@@ -316,7 +322,7 @@ Mermaidダイアグラムが正しく表示されない環境（ローカルプ�
 * **`callDistributeInventory()`**
   * **説明**: メイン処理の完了後に直接呼び出されるエントリーポイント関数。配布側 Web App に POST を送信します。
 * **`callDistributeInventoryWebAppWithRetry(payload)`**
-  * **説明**: 認証用トークンおよび実行時刻を含むペイロードを、最大3回のエクスポネンシャルバックオフ付きで配布側 Web App (Webhook) に送信します。
+  * **説明**: 認証用トークンおよび実行時刻を含むペイロードを、共通ヘルパー `09_RetryHelper.gs: executeWithRetry` 経由で最大3回のエクスポネンシャルバックオフ付きで配布側 Web App (Webhook) に送信します。
 
 ### [トリガー設定.gs]
 * **`setTrigger()`**
