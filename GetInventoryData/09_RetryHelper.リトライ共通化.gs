@@ -1,4 +1,19 @@
 /**
+ * @file 09_RetryHelper.リトライ共通化.gs
+ * @description エクスポネンシャルバックオフによる汎用リトライ処理を提供する共通モジュール。
+ * 13_NextEngineAPI.API通信.gs（在庫マスタAPI呼び出し）と 19_DistributeCaller.配布呼び出し.gs
+ * （DistributeInventory Webhook呼び出し）の両方で使用されていたリトライロジックを集約・共通化します。
+ *
+ * ### 依存関係
+ * - 参照元: 13_NextEngineAPI.API通信.gs, 19_DistributeCaller.配布呼び出し.gs
+ * - 参照先: 12_Logger.ログ管理.gs (logWithLevel, logError, LOG_LEVEL)
+ *
+ * @version 1.0
+ * @see executeWithRetry - 汎用リトライ実行関数
+ * @see test_executeWithRetry - 単体テスト用関数
+ */
+
+/**
  * エクスポネンシャルバックオフによる汎用リトライ実行関数
  *
  * 【処理フロー】
