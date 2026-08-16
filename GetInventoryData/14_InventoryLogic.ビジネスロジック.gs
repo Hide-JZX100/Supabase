@@ -30,8 +30,9 @@
  * - `stock_advance_order_quantity`: 予約在庫数
  * - ...（詳細は各関数の @return 参照）
  *
- * @version 2.1
+ * @version 2.2 - 差分データ整形関数追加
  * @see getBatchInventoryDataWithRetry
+ * @see buildModifiedInventoryDataMap - 【新規】差分取得データの整形
  * @see buildInventoryDataRows
  */
 /**
@@ -214,4 +215,42 @@ function buildInventoryDataRows(goodsMap) {
 
     logWithLevel(LOG_LEVEL.SUMMARY, `データ整形完了: ${rows.length}行`);
     return rows;
+}
+
+/**
+ * 差分取得した生在庫データMapを InventoryData オブジェクトMapに変換・整形する
+ *
+ * @param  {Map} rawStockMap - fetchModifiedStockData() の返却値 (key: stock_goods_id, value: stockData)
+ * @return {Map} 在庫データマップ (key: 商品コード, value: InventoryDataオブジェクト)
+ */
+function buildModifiedInventoryDataMap(rawStockMap) {
+    const inventoryDataMap = new Map();
+
+    if (!rawStockMap || rawStockMap.size === 0) {
+        return inventoryDataMap;
+    }
+
+    for (const [goodsId, stockData] of rawStockMap) {
+        if (!goodsId) continue;
+
+        const inventoryData = {
+            goods_id: stockData.stock_goods_id || goodsId,
+            goods_name: '',
+            stock_quantity: parseInt(stockData.stock_quantity, 10) || 0,
+            stock_allocated_quantity: parseInt(stockData.stock_allocation_quantity, 10) || 0,
+            stock_free_quantity: parseInt(stockData.stock_free_quantity, 10) || 0,
+            stock_defective_quantity: parseInt(stockData.stock_defective_quantity, 10) || 0,
+            stock_advance_order_quantity: parseInt(stockData.stock_advance_order_quantity, 10) || 0,
+            stock_advance_order_allocation_quantity: parseInt(stockData.stock_advance_order_allocation_quantity, 10) || 0,
+            stock_advance_order_free_quantity: parseInt(stockData.stock_advance_order_free_quantity, 10) || 0,
+            stock_remaining_order_quantity: parseInt(stockData.stock_remaining_order_quantity, 10) || 0,
+            stock_out_quantity: parseInt(stockData.stock_out_quantity, 10) || 0,
+            stock_last_modified_date: stockData.stock_last_modified_date || ''
+        };
+
+        inventoryDataMap.set(goodsId, inventoryData);
+    }
+
+    logWithLevel(LOG_LEVEL.DETAILED, `  差分在庫データ整形完了: ${inventoryDataMap.size}件`);
+    return inventoryDataMap;
 }
