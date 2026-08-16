@@ -24,22 +24,29 @@
  * 増やして再試行します（1秒 → 2秒 → 4秒）。
  * ※ 認証・権限系エラーは即座にエラーをスローします。
  *
- * @version 2.1
+ * @version 2.2
  * @see getBatchStockDataWithRetry - リトライ付き在庫マスタデータ取得
  * @see getBatchStockData - 在庫マスタAPI単体呼び出し（リトライなし）
+ * @see fetchModifiedStockData - 【新規】最終更新日を指定した在庫マスタ差分取得（ページネーション・リトライ対応）
  * @see updateStoredTokens - トークンをプロパティに保存（差分更新）
  * @see fetchAllGoodsData - 商品マスタAPIで全件取得
  *
  * 【公開関数一覧】
- *  @see getBatchStockDataWithRetry - 【推奨】リトライ付き在庫マスタデータ取得
- *                                    14_InventoryLogic.gs から呼び出される
+ *  @see fetchModifiedStockData     - 【新規】最終更新日を指定した在庫マスタ差分取得（14_InventoryLogic.gs / 10_Main.gs から利用）
+ *  @see getBatchStockDataWithRetry - 【推奨】リトライ付き在庫マスタデータ取得（14_InventoryLogic.gs から利用）
  *  @see getBatchStockData          - 在庫マスタAPI単体呼び出し（リトライなし）
  *                                    通常は getBatchStockDataWithRetry 経由で使用
  *  @see updateStoredTokens         - トークンをプロパティに保存（差分更新）
+ *  @see fetchAllGoodsData          - 商品マスタAPI全件取得
  *
- * 【バージョン】v2.1
+ * 【バージョン】v2.2
  * =============================================================================
  */
+
+/**
+ * 在庫マスタ検索APIで使用するフィールド一覧定数
+ */
+const STOCK_FETCH_FIELDS = 'stock_goods_id,stock_quantity,stock_allocation_quantity,stock_defective_quantity,stock_remaining_order_quantity,stock_out_quantity,stock_free_quantity,stock_advance_order_quantity,stock_advance_order_allocation_quantity,stock_advance_order_free_quantity,stock_last_modified_date';
 
 /**
  * 在庫マスタデータ取得（API呼び出し）
@@ -59,7 +66,7 @@ function getBatchStockData(goodsCodeList, tokens, batchNumber) {
         'access_token': tokens.accessToken,
         'refresh_token': tokens.refreshToken,
         'stock_goods_id-in': goodsIdCondition,
-        'fields': 'stock_goods_id,stock_quantity,stock_allocation_quantity,stock_defective_quantity,stock_remaining_order_quantity,stock_out_quantity,stock_free_quantity,stock_advance_order_quantity,stock_advance_order_allocation_quantity,stock_advance_order_free_quantity',
+        'fields': STOCK_FETCH_FIELDS,
         'limit': MAX_ITEMS_PER_CALL.toString()
     };
 
@@ -315,6 +322,78 @@ function fetchAllGoodsData(tokens) {
     return goodsMap;
 }
 
+/**
+ * 指定日時以降に更新された在庫マスタデータを差分取得（ページネーション・リトライ対応）
+ *
+ * @param  {string} sinceDateTime - 検索基準日時（例: 'YYYY-MM-dd HH:mm:ss'）
+ * @param  {Object} tokens        - 認証トークン
+ * @return {Map}                  - 在庫データマップ (key: stock_goods_id, value: stockData)
+ * @throws {Error}                - APIエラーまたは通信エラー（全リトライ失敗時）
+ */
+function fetchModifiedStockData(sinceDateTime, tokens) {
+    if (!sinceDateTime) {
+        throw new Error('fetchModifiedStockData: sinceDateTime が指定されていません');
+    }
+
+    const LIMIT = MAX_ITEMS_PER_CALL;
+    let offset = 0;
+    let page = 1;
+    let hasNext = true;
+    const stockMap = new Map();
+
+    logWithLevel(LOG_LEVEL.SUMMARY, `在庫マスタ差分取得開始 (基準日時: ${sinceDateTime})`);
+
+    while (hasNext) {
+        const currentPage = page;
+        const currentOffset = offset;
+
+        // リトライ共通ヘルパーを使用して1ページ分を取得
+        const result = executeWithRetry(
+            () => fetchModifiedStockDataOnePage_(sinceDateTime, tokens, LIMIT, currentOffset),
+            {
+                maxRetries: RETRY_CONFIG.MAX_RETRIES,
+                enableRetry: RETRY_CONFIG.ENABLE_RETRY,
+                context: `在庫マスタ差分取得(ページ${currentPage}, offset=${currentOffset})`,
+                onRetryAttempt: (attempt) => {
+                    recordRetryAttempt();
+                    logWithLevel(LOG_LEVEL.SUMMARY, `  在庫マスタ差分取得 ページ${currentPage} リトライ試行中 (${attempt}/${RETRY_CONFIG.MAX_RETRIES})`);
+                }
+            }
+        );
+
+        const data = result.data;
+
+        // トークン更新の差分があればプロパティを更新
+        if (result.updatedTokens) {
+            updateStoredTokens(result.updatedTokens.accessToken, result.updatedTokens.refreshToken);
+            tokens.accessToken = result.updatedTokens.accessToken;
+            tokens.refreshToken = result.updatedTokens.refreshToken;
+        }
+
+        // 取得データをMapに格納
+        for (const record of data) {
+            if (record.stock_goods_id) {
+                stockMap.set(record.stock_goods_id, record);
+            }
+        }
+
+        logWithLevel(LOG_LEVEL.SUMMARY, `  ページ${currentPage}: ${data.length}件取得 (累計: ${stockMap.size}件)`);
+
+        // 返却件数が limit 未満 → 最終ページ判定
+        if (data.length < LIMIT) {
+            hasNext = false;
+            logWithLevel(LOG_LEVEL.SUMMARY, `  差分取得 最終ページ到達`);
+        } else {
+            offset += LIMIT;
+            page++;
+            Utilities.sleep(API_WAIT_TIME);
+        }
+    }
+
+    logWithLevel(LOG_LEVEL.SUMMARY, `在庫マスタ差分取得完了: 合計 ${stockMap.size}件`);
+    return stockMap;
+}
+
 // ----------------------------------------------------------------------------
 // 内部関数（_ サフィックスで内部専用であることを示す）
 // ----------------------------------------------------------------------------
@@ -378,6 +457,73 @@ function fetchGoodsDataOnePage_(tokens, limit, offset) {
         logAPIErrorDetail(
             '商品マスタAPI',
             { offset, limit },
+            null,
+            error
+        );
+        throw error;
+    }
+}
+
+/**
+ * 在庫マスタ差分取得 1ページ分リクエスト（内部関数）
+ *
+ * @param  {string} sinceDateTime - 検索基準日時（例: 'YYYY-MM-dd HH:mm:ss'）
+ * @param  {Object} tokens        - 認証トークン
+ * @param  {number} limit         - 取得件数（最大1000）
+ * @param  {number} offset        - 取得開始位置（0始まり）
+ * @return {Object}               - { data: Array, updatedTokens: Object|null }
+ * @throws {Error}                - APIエラーまたは通信エラーの場合
+ */
+function fetchModifiedStockDataOnePage_(sinceDateTime, tokens, limit, offset) {
+    const url = `${NE_API_URL}/api_v1_master_stock/search`;
+
+    const payload = {
+        'access_token': tokens.accessToken,
+        'refresh_token': tokens.refreshToken,
+        'stock_last_modified_date-gte': sinceDateTime,
+        'fields': STOCK_FETCH_FIELDS,
+        'limit': limit.toString(),
+        'offset': offset.toString()
+    };
+
+    const options = {
+        'method': 'POST',
+        'headers': { 'Content-Type': 'application/x-www-form-urlencoded' },
+        'payload': Object.keys(payload)
+            .map(key => encodeURIComponent(key) + '=' + encodeURIComponent(payload[key]))
+            .join('&')
+    };
+
+    try {
+        const response = UrlFetchApp.fetch(url, options);
+        const responseData = JSON.parse(response.getContentText());
+
+        if (responseData.result !== 'success') {
+            throw new Error(
+                `在庫マスタ差分API エラー: ${responseData.message || 'Unknown error'} (offset=${offset})`
+            );
+        }
+
+        // トークン更新の差分チェック
+        const updatedTokens = (
+            responseData.access_token &&
+            responseData.refresh_token &&
+            (responseData.access_token !== tokens.accessToken ||
+                responseData.refresh_token !== tokens.refreshToken)
+        ) ? {
+            accessToken: responseData.access_token,
+            refreshToken: responseData.refresh_token
+        } : null;
+
+        return {
+            data: responseData.data || [],
+            updatedTokens
+        };
+
+    } catch (error) {
+        logAPIErrorDetail(
+            '在庫マスタ差分API',
+            { sinceDateTime, offset, limit },
             null,
             error
         );
