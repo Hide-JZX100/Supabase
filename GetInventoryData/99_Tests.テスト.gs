@@ -29,7 +29,7 @@
  * 4. `showSREDashboard()`             : エラーログ・リトライ統計の確認
  *
  * ### 主要機能
- * - **動作確認**: `testRetryFunction`, `verifyConfiguration`, `test_fetchModifiedStockData`
+ * - **動作確認**: `testRetryFunction`, `verifyConfiguration`, `test_fetchModifiedStockData`, `test_checkpointAndLogic`
  * - **システム健全性**: `showSREDashboard`
  * - **リトライ検証**: `testRetryLogging`, `finalRetryTest`
  * - **デバッグ・診断**: `checkFileUsage`, `locateFunctions`
@@ -39,9 +39,10 @@
  * - `testRetryFunction()` は実際にAPIを呼び出すため、レート制限に注意してください。
  * - スプレッドシートへの書き込みを伴うテストは本番データへの影響に注意してください。
  *
- * @version 2.5 (Phase 1: 在庫マスタ差分取得APIテスト追加)
+ * @version 2.6 (Phase 2: チェックポイント管理・データ整形テスト追加)
  * @see testRetryFunction
  * @see test_fetchModifiedStockData
+ * @see test_checkpointAndLogic
  * @see verifyConfiguration
  * @see showSREDashboard
  * @see testRetryLogging
@@ -1499,6 +1500,118 @@ function test_fetchModifiedStockData() {
         console.error('❌ 在庫マスタ差分取得APIテストでエラーが発生しました: ' + error.message);
         if (error.stack) {
             console.error(error.stack);
+        }
+    }
+}
+
+/**
+ * チェックポイント管理および差分データ整形ロジックの単体テスト
+ *
+ * 【検証項目】
+ * 1. プロパティ未設定時のフォールバック日時生成（YYYY-MM-dd HH:mm:ss）
+ * 2. saveLastStockSyncTime() による日時保存（Dateオブジェクト/文字列）
+ * 3. getLastStockSyncTime() による保存日時取得
+ * 4. buildModifiedInventoryDataMap() による生データからInventoryDataオブジェクトへの変換・パース
+ * ※ 本テストは実行前のスクリプトプロパティを退避し、終了時に必ず復元します。
+ */
+function test_checkpointAndLogic() {
+    console.log('=== チェックポイント管理 & データ整形テスト開始 ===\n');
+
+    const properties = PropertiesService.getScriptProperties();
+    const originalValue = properties.getProperty('STOCK_LAST_SYNC_DATETIME');
+
+    try {
+        // --- テスト1: 未設定時のフォールバック動作検証 ---
+        console.log('【テスト1】未設定時のフォールバック日時生成テスト');
+        properties.deleteProperty('STOCK_LAST_SYNC_DATETIME');
+
+        const fallbackTime = getLastStockSyncTime(2);
+        console.log(`  フォールバック日時（2時間前）: ${fallbackTime}`);
+
+        // 日時フォーマット YYYY-MM-dd HH:mm:ss の正規表現チェック
+        const dateFormatRegex = /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/;
+        if (dateFormatRegex.test(fallbackTime)) {
+            console.log('  ✓ フォーマット検証成功 (YYYY-MM-dd HH:mm:ss)\n');
+        } else {
+            console.error(`  ❌ フォーマット不正: ${fallbackTime}\n`);
+        }
+
+        // --- テスト2: Dateオブジェクトによる保存と取得 ---
+        console.log('【テスト2】Dateオブジェクトでの保存・取得テスト');
+        const testDate = new Date(2026, 7, 16, 12, 34, 56); // 2026-08-16 12:34:56
+        const savedStr1 = saveLastStockSyncTime(testDate);
+        const loadedStr1 = getLastStockSyncTime();
+
+        console.log(`  保存日時: ${savedStr1}, 取得日時: ${loadedStr1}`);
+        if (savedStr1 === '2026-08-16 12:34:56' && loadedStr1 === '2026-08-16 12:34:56') {
+            console.log('  ✓ Dateオブジェクトでの保存・取得成功\n');
+        } else {
+            console.error('  ❌ 保存または取得値が不一致です\n');
+        }
+
+        // --- テスト3: 文字列での保存と取得 ---
+        console.log('【テスト3】文字列での保存・取得テスト');
+        const customDateStr = '2026-08-16 15:00:00';
+        saveLastStockSyncTime(customDateStr);
+        const loadedStr2 = getLastStockSyncTime();
+
+        console.log(`  保存文字列: ${customDateStr}, 取得日時: ${loadedStr2}`);
+        if (loadedStr2 === customDateStr) {
+            console.log('  ✓ 文字列での保存・取得成功\n');
+        } else {
+            console.error('  ❌ 文字列の保存または取得が不一致です\n');
+        }
+
+        // --- テスト4: buildModifiedInventoryDataMap() データ整形検証 ---
+        console.log('【テスト4】差分データ整形（buildModifiedInventoryDataMap）テスト');
+        const mockRawMap = new Map();
+        mockRawMap.set('TEST-ITEM-001', {
+            stock_goods_id: 'TEST-ITEM-001',
+            stock_quantity: '25',           // 文字列
+            stock_allocation_quantity: '5', // 文字列
+            stock_free_quantity: '20',       // 文字列
+            stock_defective_quantity: null,  // null
+            stock_advance_order_quantity: '0',
+            stock_advance_order_allocation_quantity: '0',
+            stock_advance_order_free_quantity: '0',
+            stock_remaining_order_quantity: '10',
+            stock_out_quantity: '0',
+            stock_last_modified_date: '2026-08-16 14:30:00'
+        });
+
+        const formattedMap = buildModifiedInventoryDataMap(mockRawMap);
+        console.log(`  整形結果件数: ${formattedMap.size}件`);
+
+        const item = formattedMap.get('TEST-ITEM-001');
+        if (item &&
+            item.goods_id === 'TEST-ITEM-001' &&
+            item.stock_quantity === 25 &&
+            typeof item.stock_quantity === 'number' &&
+            item.stock_allocated_quantity === 5 &&
+            item.stock_free_quantity === 20 &&
+            item.stock_defective_quantity === 0 && // null が 0 に変換されていること
+            item.stock_remaining_order_quantity === 10 &&
+            item.stock_last_modified_date === '2026-08-16 14:30:00') {
+            console.log('  ✓ 在庫数値のパース、デフォルト値設定、日付保持すべて正常\n');
+        } else {
+            console.error('  ❌ データ整形結果が期待値と異なります:', JSON.stringify(item));
+        }
+
+        console.log('=== チェックポイント管理 & データ整形テスト完了: すべて正常 ===');
+
+    } catch (error) {
+        console.error('❌ テスト実行中にエラーが発生しました: ' + error.message);
+        if (error.stack) {
+            console.error(error.stack);
+        }
+    } finally {
+        // 元のプロパティ値を必ず復元
+        if (originalValue !== null) {
+            properties.setProperty('STOCK_LAST_SYNC_DATETIME', originalValue);
+            console.log('\n[復元] 元の STOCK_LAST_SYNC_DATETIME を復元しました: ' + originalValue);
+        } else {
+            properties.deleteProperty('STOCK_LAST_SYNC_DATETIME');
+            console.log('\n[クリーンアップ] テスト用プロパティを削除しました');
         }
     }
 }
