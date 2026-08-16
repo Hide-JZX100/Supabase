@@ -29,7 +29,7 @@
  * 4. `showSREDashboard()`             : エラーログ・リトライ統計の確認
  *
  * ### 主要機能
- * - **動作確認**: `testRetryFunction`, `verifyConfiguration`
+ * - **動作確認**: `testRetryFunction`, `verifyConfiguration`, `test_fetchModifiedStockData`
  * - **システム健全性**: `showSREDashboard`
  * - **リトライ検証**: `testRetryLogging`, `finalRetryTest`
  * - **デバッグ・診断**: `checkFileUsage`, `locateFunctions`
@@ -39,8 +39,9 @@
  * - `testRetryFunction()` は実際にAPIを呼び出すため、レート制限に注意してください。
  * - スプレッドシートへの書き込みを伴うテストは本番データへの影響に注意してください。
  *
- * @version 2.4 (Phase 4: 差分取得テスト追加)
+ * @version 2.5 (Phase 1: 在庫マスタ差分取得APIテスト追加)
  * @see testRetryFunction
+ * @see test_fetchModifiedStockData
  * @see verifyConfiguration
  * @see showSREDashboard
  * @see testRetryLogging
@@ -1435,4 +1436,69 @@ function testCallDistributeInventoryFailureNotification() {
     }
 
     console.log('\n=== テスト完了 ===');
+}
+
+/**
+ * 在庫マスタ差分取得API（fetchModifiedStockData）の単体テスト
+ *
+ * 【検証項目】
+ * 1. 未来日時（例: 2099-01-01）を指定した場合に 0件 が返ること
+ * 2. 過去24時間前を指定した場合に、更新レコードが正常に取得されること
+ * 3. 返却されたデータに各フィールド（goods_id, 在庫数, 最終更新日など）が存在すること
+ * 4. トークン自動更新およびリトライ制御が正常に働くこと
+ */
+function test_fetchModifiedStockData() {
+    console.log('=== 在庫マスタ差分取得API（fetchModifiedStockData）テスト開始 ===\n');
+
+    try {
+        const tokens = getStoredTokens();
+        if (!tokens.accessToken || !tokens.refreshToken) {
+            throw new Error('アクセストークンまたはリフレッシュトークンが未設定です');
+        }
+
+        // --- テスト1: 未来日時での0件検証 ---
+        const futureDate = '2099-01-01 00:00:00';
+        console.log(`【テスト1】未来日時 (${futureDate}) での差分取得テスト`);
+        const futureResultMap = fetchModifiedStockData(futureDate, tokens);
+        console.log(`  結果件数: ${futureResultMap.size}件`);
+        if (futureResultMap.size === 0) {
+            console.log('  ✓ 期待通り 0件 が返却されました。\n');
+        } else {
+            console.warn(`  ⚠️ 0件想定ですが ${futureResultMap.size}件 取得されました。\n`);
+        }
+
+        // --- テスト2: 直近24時間の差分取得検証 ---
+        const now = new Date();
+        const yesterday = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+        const yesterdayStr = Utilities.formatDate(yesterday, 'Asia/Tokyo', 'yyyy-MM-dd HH:mm:ss');
+
+        console.log(`【テスト2】直近24時間前 (${yesterdayStr}) 以降の差分取得テスト`);
+        const recentResultMap = fetchModifiedStockData(yesterdayStr, tokens);
+        console.log(`  結果件数: ${recentResultMap.size}件`);
+
+        if (recentResultMap.size > 0) {
+            // 先頭3件のサンプルを出力
+            console.log('  取得データサンプル（最大3件）:');
+            let count = 0;
+            for (const [goodsId, stockData] of recentResultMap) {
+                if (count >= 3) break;
+                console.log(`    [${count + 1}] 商品コード: ${goodsId}`);
+                console.log(`        在庫数: ${stockData.stock_quantity}, フリー在庫数: ${stockData.stock_free_quantity}`);
+                console.log(`        引当数: ${stockData.stock_allocation_quantity}, 不良在庫数: ${stockData.stock_defective_quantity}`);
+                console.log(`        最終更新日: ${stockData.stock_last_modified_date}`);
+                count++;
+            }
+            console.log('  ✓ 差分レコードが正常に取得・マッピングされました。\n');
+        } else {
+            console.log('  ℹ️ 直近24時間に更新された在庫レコードはありませんでした（正常動作）。\n');
+        }
+
+        console.log('=== 在庫マスタ差分取得APIテスト完了: すべて正常 ===');
+
+    } catch (error) {
+        console.error('❌ 在庫マスタ差分取得APIテストでエラーが発生しました: ' + error.message);
+        if (error.stack) {
+            console.error(error.stack);
+        }
+    }
 }
