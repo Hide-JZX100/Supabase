@@ -240,12 +240,12 @@ Webhookによるリアルタイム同期のバックアップ（フェイルセ�
 | 実行時刻 | 実行関数 | 目的 |
 |---|---|---|
 | **0:10** | `distributeInventoryChanges` | 深夜の商品マスタ同期（0:05完了）に対するバックアップ同期 |
-| **8:05** | `distributeInventoryChanges` | 朝の在庫更新（8:00完了）に対するバックアップ同期 |
-| **10:05** | `distributeInventoryChanges` | 午前の在庫更新（10:00完了）に対するバックアップ同期 |
-| **13:35** | `distributeInventoryChanges` | 午後の在庫更新（13:30完了）に対するバックアップ同期 |
-| **16:05** | `distributeInventoryChanges` | 夕方の在庫更新（16:00完了）に対するバックアップ同期 |
-| **19:05** | `distributeInventoryChanges` | 夜間の在庫更新（19:00完了）に対するバックアップ同期 |
-| **21:05** | `distributeInventoryChanges` | 夜間の在庫更新（21:00完了）に対するバックアップ同期 |
+| **8:05** | `distributeInventoryChanges` | 朝の在庫更新（7:55完了）に対するバックアップ同期 |
+| **10:05** | `distributeInventoryChanges` | 午前の在庫更新（9:55完了）に対するバックアップ同期 |
+| **13:35** | `distributeInventoryChanges` | 午後の在庫更新（13:25完了）に対するバックアップ同期 |
+| **16:05** | `distributeInventoryChanges` | 夕方の在庫更新（15:55完了）に対するバックアップ同期 |
+| **19:05** | `distributeInventoryChanges` | 夜間の在庫更新（18:55完了）に対するバックアップ同期 |
+| **21:05** | `distributeInventoryChanges` | 夜間の在庫更新（20:55完了）に対するバックアップ同期 |
 
 ---
 
