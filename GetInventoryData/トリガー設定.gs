@@ -25,8 +25,11 @@
  * 
  * キー                     | 値
  * -------------------------|------------------------------------
- * TRIGGER_FUNCTION_NAME    | 実行したい関数名（例: updateStock）
+ * TRIGGER_FUNCTION_NAME    | updateInventoryDataIncremental （日中差分同期 推奨）
  * TRIGGER_MODE             | TODAY または TOMORROW
+ * 
+ * ※ 深夜の全件同期（updateInventoryDataFromGoodsMaster）は 
+ *    setTriggerForGoodsMaster() により別途毎日 0:05 に自動設定されます。
  * 
  * 【TRIGGER_MODE の説明】
  * - TODAY: このスクリプト実行時刻より後の時刻のみ、当日に実行するトリガーを作成
