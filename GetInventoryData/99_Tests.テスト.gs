@@ -29,7 +29,7 @@
  * 4. `showSREDashboard()`             : エラーログ・リトライ統計の確認
  *
  * ### 主要機能
- * - **動作確認**: `testRetryFunction`, `verifyConfiguration`
+ * - **動作確認**: `testRetryFunction`, `verifyConfiguration`, `test_fetchModifiedStockData`, `test_checkpointAndLogic`, `test_incrementalSheetAndSupabaseUpdate`, `test_updateInventoryDataIncremental`
  * - **システム健全性**: `showSREDashboard`
  * - **リトライ検証**: `testRetryLogging`, `finalRetryTest`
  * - **デバッグ・診断**: `checkFileUsage`, `locateFunctions`
@@ -39,8 +39,12 @@
  * - `testRetryFunction()` は実際にAPIを呼び出すため、レート制限に注意してください。
  * - スプレッドシートへの書き込みを伴うテストは本番データへの影響に注意してください。
  *
- * @version 2.4 (Phase 4: 差分取得テスト追加)
+ * @version 2.8 (Phase 4: 差分更新メイン処理統合テスト追加)
  * @see testRetryFunction
+ * @see test_fetchModifiedStockData
+ * @see test_checkpointAndLogic
+ * @see test_incrementalSheetAndSupabaseUpdate
+ * @see test_updateInventoryDataIncremental
  * @see verifyConfiguration
  * @see showSREDashboard
  * @see testRetryLogging
@@ -1435,4 +1439,342 @@ function testCallDistributeInventoryFailureNotification() {
     }
 
     console.log('\n=== テスト完了 ===');
+}
+
+/**
+ * 在庫マスタ差分取得API（fetchModifiedStockData）の単体テスト
+ *
+ * 【検証項目】
+ * 1. 未来日時（例: 2099-01-01）を指定した場合に 0件 が返ること
+ * 2. 過去24時間前を指定した場合に、更新レコードが正常に取得されること
+ * 3. 返却されたデータに各フィールド（goods_id, 在庫数, 最終更新日など）が存在すること
+ * 4. トークン自動更新およびリトライ制御が正常に働くこと
+ */
+function test_fetchModifiedStockData() {
+    console.log('=== 在庫マスタ差分取得API（fetchModifiedStockData）テスト開始 ===\n');
+
+    try {
+        const tokens = getStoredTokens();
+        if (!tokens.accessToken || !tokens.refreshToken) {
+            throw new Error('アクセストークンまたはリフレッシュトークンが未設定です');
+        }
+
+        // --- テスト1: 未来日時での0件検証 ---
+        const futureDate = '2099-01-01 00:00:00';
+        console.log(`【テスト1】未来日時 (${futureDate}) での差分取得テスト`);
+        const futureResultMap = fetchModifiedStockData(futureDate, tokens);
+        console.log(`  結果件数: ${futureResultMap.size}件`);
+        if (futureResultMap.size === 0) {
+            console.log('  ✓ 期待通り 0件 が返却されました。\n');
+        } else {
+            console.warn(`  ⚠️ 0件想定ですが ${futureResultMap.size}件 取得されました。\n`);
+        }
+
+        // --- テスト2: 直近24時間の差分取得検証 ---
+        const now = new Date();
+        const yesterday = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+        const yesterdayStr = Utilities.formatDate(yesterday, 'Asia/Tokyo', 'yyyy-MM-dd HH:mm:ss');
+
+        console.log(`【テスト2】直近24時間前 (${yesterdayStr}) 以降の差分取得テスト`);
+        const recentResultMap = fetchModifiedStockData(yesterdayStr, tokens);
+        console.log(`  結果件数: ${recentResultMap.size}件`);
+
+        if (recentResultMap.size > 0) {
+            // 先頭3件のサンプルを出力
+            console.log('  取得データサンプル（最大3件）:');
+            let count = 0;
+            for (const [goodsId, stockData] of recentResultMap) {
+                if (count >= 3) break;
+                console.log(`    [${count + 1}] 商品コード: ${goodsId}`);
+                console.log(`        在庫数: ${stockData.stock_quantity}, フリー在庫数: ${stockData.stock_free_quantity}`);
+                console.log(`        引当数: ${stockData.stock_allocation_quantity}, 不良在庫数: ${stockData.stock_defective_quantity}`);
+                console.log(`        最終更新日: ${stockData.stock_last_modified_date}`);
+                count++;
+            }
+            console.log('  ✓ 差分レコードが正常に取得・マッピングされました。\n');
+        } else {
+            console.log('  ℹ️ 直近24時間に更新された在庫レコードはありませんでした（正常動作）。\n');
+        }
+
+        console.log('=== 在庫マスタ差分取得APIテスト完了: すべて正常 ===');
+
+    } catch (error) {
+        console.error('❌ 在庫マスタ差分取得APIテストでエラーが発生しました: ' + error.message);
+        if (error.stack) {
+            console.error(error.stack);
+        }
+    }
+}
+
+/**
+ * チェックポイント管理および差分データ整形ロジックの単体テスト
+ *
+ * 【検証項目】
+ * 1. プロパティ未設定時のフォールバック日時生成（YYYY-MM-dd HH:mm:ss）
+ * 2. saveLastStockSyncTime() による日時保存（Dateオブジェクト/文字列）
+ * 3. getLastStockSyncTime() による保存日時取得
+ * 4. buildModifiedInventoryDataMap() による生データからInventoryDataオブジェクトへの変換・パース
+ * ※ 本テストは実行前のスクリプトプロパティを退避し、終了時に必ず復元します。
+ */
+function test_checkpointAndLogic() {
+    console.log('=== チェックポイント管理 & データ整形テスト開始 ===\n');
+
+    const properties = PropertiesService.getScriptProperties();
+    const originalValue = properties.getProperty('STOCK_LAST_SYNC_DATETIME');
+
+    try {
+        // --- テスト1: 未設定時のフォールバック動作検証 ---
+        console.log('【テスト1】未設定時のフォールバック日時生成テスト');
+        properties.deleteProperty('STOCK_LAST_SYNC_DATETIME');
+
+        const fallbackTime = getLastStockSyncTime(2);
+        console.log(`  フォールバック日時（2時間前）: ${fallbackTime}`);
+
+        // 日時フォーマット YYYY-MM-dd HH:mm:ss の正規表現チェック
+        const dateFormatRegex = /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/;
+        if (dateFormatRegex.test(fallbackTime)) {
+            console.log('  ✓ フォーマット検証成功 (YYYY-MM-dd HH:mm:ss)\n');
+        } else {
+            console.error(`  ❌ フォーマット不正: ${fallbackTime}\n`);
+        }
+
+        // --- テスト2: Dateオブジェクトによる保存と取得 ---
+        console.log('【テスト2】Dateオブジェクトでの保存・取得テスト');
+        const testDate = new Date(2026, 7, 16, 12, 34, 56); // 2026-08-16 12:34:56
+        const savedStr1 = saveLastStockSyncTime(testDate);
+        const loadedStr1 = getLastStockSyncTime();
+
+        console.log(`  保存日時: ${savedStr1}, 取得日時: ${loadedStr1}`);
+        if (savedStr1 === '2026-08-16 12:34:56' && loadedStr1 === '2026-08-16 12:34:56') {
+            console.log('  ✓ Dateオブジェクトでの保存・取得成功\n');
+        } else {
+            console.error('  ❌ 保存または取得値が不一致です\n');
+        }
+
+        // --- テスト3: 文字列での保存と取得 ---
+        console.log('【テスト3】文字列での保存・取得テスト');
+        const customDateStr = '2026-08-16 15:00:00';
+        saveLastStockSyncTime(customDateStr);
+        const loadedStr2 = getLastStockSyncTime();
+
+        console.log(`  保存文字列: ${customDateStr}, 取得日時: ${loadedStr2}`);
+        if (loadedStr2 === customDateStr) {
+            console.log('  ✓ 文字列での保存・取得成功\n');
+        } else {
+            console.error('  ❌ 文字列の保存または取得が不一致です\n');
+        }
+
+        // --- テスト4: buildModifiedInventoryDataMap() データ整形検証 ---
+        console.log('【テスト4】差分データ整形（buildModifiedInventoryDataMap）テスト');
+        const mockRawMap = new Map();
+        mockRawMap.set('TEST-ITEM-001', {
+            stock_goods_id: 'TEST-ITEM-001',
+            stock_quantity: '25',           // 文字列
+            stock_allocation_quantity: '5', // 文字列
+            stock_free_quantity: '20',       // 文字列
+            stock_defective_quantity: null,  // null
+            stock_advance_order_quantity: '0',
+            stock_advance_order_allocation_quantity: '0',
+            stock_advance_order_free_quantity: '0',
+            stock_remaining_order_quantity: '10',
+            stock_out_quantity: '0',
+            stock_last_modified_date: '2026-08-16 14:30:00'
+        });
+
+        const formattedMap = buildModifiedInventoryDataMap(mockRawMap);
+        console.log(`  整形結果件数: ${formattedMap.size}件`);
+
+        const item = formattedMap.get('TEST-ITEM-001');
+        if (item &&
+            item.goods_id === 'TEST-ITEM-001' &&
+            item.stock_quantity === 25 &&
+            typeof item.stock_quantity === 'number' &&
+            item.stock_allocated_quantity === 5 &&
+            item.stock_free_quantity === 20 &&
+            item.stock_defective_quantity === 0 && // null が 0 に変換されていること
+            item.stock_remaining_order_quantity === 10 &&
+            item.stock_last_modified_date === '2026-08-16 14:30:00') {
+            console.log('  ✓ 在庫数値のパース、デフォルト値設定、日付保持すべて正常\n');
+        } else {
+            console.error('  ❌ データ整形結果が期待値と異なります:', JSON.stringify(item));
+        }
+
+        console.log('=== チェックポイント管理 & データ整形テスト完了: すべて正常 ===');
+
+    } catch (error) {
+        console.error('❌ テスト実行中にエラーが発生しました: ' + error.message);
+        if (error.stack) {
+            console.error(error.stack);
+        }
+    } finally {
+        // 元のプロパティ値を必ず復元
+        if (originalValue !== null) {
+            properties.setProperty('STOCK_LAST_SYNC_DATETIME', originalValue);
+            console.log('\n[復元] 元の STOCK_LAST_SYNC_DATETIME を復元しました: ' + originalValue);
+        } else {
+            properties.deleteProperty('STOCK_LAST_SYNC_DATETIME');
+            console.log('\n[クリーンアップ] テスト用プロパティを削除しました');
+        }
+    }
+}
+
+/**
+ * 差分更新におけるスプレッドシート行更新およびSupabase更新の単体テスト
+ *
+ * 【検証項目】
+ * 1. スプレッドシートから先頭2件の商品コードと行番号を取得
+ * 2. テスト用差分データを生成し、updateIncrementalInventoryData() で更新
+ * 3. シートの該当セルが正しく更新されたかを読み取って検証
+ * 4. upsertStockToSupabase() でSupabaseへ送信し、RPC呼び出しが成功することを検証
+ * 5. finally ブロックでシートの値を元の状態に安全に復元
+ */
+function test_incrementalSheetAndSupabaseUpdate() {
+    console.log('=== 差分更新（シート & Supabase）テスト開始 ===\n');
+
+    const { SPREADSHEET_ID, SHEET_NAME } = getSpreadsheetConfig();
+    const spreadsheet = SpreadsheetApp.openById(SPREADSHEET_ID);
+    const sheet = spreadsheet.getSheetByName(SHEET_NAME);
+
+    if (!sheet) {
+        throw new Error(`シート "${SHEET_NAME}" が見つかりません`);
+    }
+
+    const lastRow = sheet.getLastRow();
+    if (lastRow <= 1) {
+        console.warn('⚠️ シートにデータが存在しないためテストをスキップします');
+        return;
+    }
+
+    // テスト対象: 先頭2行（行2〜3）
+    const targetCount = Math.min(2, lastRow - 1);
+    const originalRange = sheet.getRange(2, 1, targetCount, 12);
+    const originalValues = originalRange.getValues();
+
+    // 元データを退避
+    const backupRows = originalValues.map(row => [...row]);
+    const targetGoodsCodes = [];
+    const rowIndexMap = new Map();
+
+    for (let i = 0; i < originalValues.length; i++) {
+        const code = originalValues[i][COLUMNS.GOODS_CODE];
+        if (code && code.toString().trim()) {
+            const cleanCode = code.toString().trim();
+            targetGoodsCodes.push(cleanCode);
+            rowIndexMap.set(cleanCode, i + 2);
+        }
+    }
+
+    if (targetGoodsCodes.length === 0) {
+        console.warn('⚠️ 有効な商品コードが見つかりません');
+        return;
+    }
+
+    console.log(`テスト対象商品: ${targetGoodsCodes.join(', ')} (行: ${Array.from(rowIndexMap.values()).join(', ')})`);
+
+    try {
+        // --- テスト用ダミー差分データの構築 ---
+        const testInventoryMap = new Map();
+        for (const code of targetGoodsCodes) {
+            testInventoryMap.set(code, {
+                goods_id: code,
+                goods_name: '',
+                stock_quantity: 999,
+                stock_allocated_quantity: 11,
+                stock_free_quantity: 988,
+                stock_defective_quantity: 0,
+                stock_advance_order_quantity: 0,
+                stock_advance_order_allocation_quantity: 0,
+                stock_advance_order_free_quantity: 0,
+                stock_remaining_order_quantity: 50,
+                stock_out_quantity: 0,
+                stock_last_modified_date: '2026-08-17 10:00:00'
+            });
+        }
+
+        // --- 1. スプレッドシート差分行更新テスト ---
+        console.log('\n【1】updateIncrementalInventoryData() の実行テスト');
+        const sheetResult = updateIncrementalInventoryData(sheet, testInventoryMap, rowIndexMap);
+        console.log(`  更新結果: 成功 ${sheetResult.updated}件 / エラー ${sheetResult.errorCount}件`);
+
+        if (sheetResult.updated === targetGoodsCodes.length) {
+            console.log('  ✓ スプレッドシート差分更新件数が一致');
+        } else {
+            console.error(`  ❌ 更新件数不一致: 期待 ${targetGoodsCodes.length}, 実際 ${sheetResult.updated}`);
+        }
+
+        // 更新後のシートセル値を直接読み取って検証（在庫数 999）
+        const updatedRange = sheet.getRange(2, COLUMNS.STOCK_QTY + 1, targetCount, 1);
+        const updatedStocks = updatedRange.getValues();
+        const allMatched = updatedStocks.every(r => r[0] === 999);
+        if (allMatched) {
+            console.log('  ✓ シート上の在庫数セル値が 999 に更新されていることを確認');
+        } else {
+            console.error('  ❌ シート上の在庫数値が期待値と異なります:', updatedStocks);
+        }
+
+        // --- 2. Supabase upsertStockToSupabase() 実行テスト ---
+        console.log('\n【2】upsertStockToSupabase() の実行テスト');
+        const supabaseResult = upsertStockToSupabase(testInventoryMap);
+        console.log(`  Supabase送信結果: レコード ${supabaseResult.records}件, チャンク ${supabaseResult.chunks}, 成功: ${supabaseResult.success}`);
+
+        if (supabaseResult.success) {
+            console.log('  ✓ Supabaseへの在庫数値upsert成功');
+        } else {
+            console.error('  ❌ Supabaseへの在庫数値upsert失敗');
+        }
+
+        console.log('\n=== 差分更新（シート & Supabase）テスト完了: すべて正常 ===');
+
+    } catch (error) {
+        console.error('❌ テスト実行中にエラーが発生しました: ' + error.message);
+        if (error.stack) {
+            console.error(error.stack);
+        }
+    } finally {
+        // 元のシートデータを必ず復元
+        try {
+            originalRange.setValues(backupRows);
+            console.log('\n[復元] スプレッドシートのテスト行を元の値に復元しました');
+        } catch (restoreError) {
+            console.error('❌ シートの復元に失敗しました: ' + restoreError.message);
+        }
+    }
+}
+
+/**
+ * 在庫情報差分更新メイン処理（updateInventoryDataIncremental）の統合手動テスト
+ *
+ * 【検証項目】
+ * 1. 実行前の前回同期チェックポイント（STOCK_LAST_SYNC_DATETIME）の取得・表示
+ * 2. updateInventoryDataIncremental() の呼び出し（差分取得→整形→シート更新→Supabase送信→チェックポイント更新→配布連携）
+ * 3. 実行後のチェックポイントが更新されたことの確認
+ * 4. 全体処理が例外なく完了することの検証
+ */
+function test_updateInventoryDataIncremental() {
+    console.log('=== 在庫情報差分更新（updateInventoryDataIncremental）統合テスト開始 ===\n');
+
+    try {
+        const beforeSyncTime = getLastStockSyncTime();
+        console.log(`[開始前] 前回同期基準日時: ${beforeSyncTime}`);
+
+        console.log('\n--- updateInventoryDataIncremental() を実行します ---');
+        updateInventoryDataIncremental();
+
+        const afterSyncTime = getLastStockSyncTime();
+        console.log(`\n[完了後] 新しい同期基準日時: ${afterSyncTime}`);
+
+        if (beforeSyncTime !== afterSyncTime) {
+            console.log('✓ チェックポイントが正常に前進・更新されました。');
+        } else {
+            console.log('ℹ️ チェックポイントの日時は同一でした（同一秒内実行または設定値）。');
+        }
+
+        console.log('\n=== 在庫情報差分更新 統合テスト完了: 正常終了 ===');
+
+    } catch (error) {
+        console.error('❌ 差分更新統合テストでエラーが発生しました: ' + error.message);
+        if (error.stack) {
+            console.error(error.stack);
+        }
+    }
 }

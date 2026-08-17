@@ -31,10 +31,13 @@
  * | RECEIVER_WEBAPP_URL | DistributeInventory側のWeb AppデプロイURL |
  * | API_SHARED_TOKEN | DistributeInventoryと共有する認証トークン |
  * | DISTRIBUTE_TRIGGER_DELAY_MS | 動的トリガー発火までの遅延ms（省略時100） |
+ * | STOCK_LAST_SYNC_DATETIME | 在庫マスタ差分取得の前回同期日時（自動更新） |
  *
- * @version 2.0 - ログ最適化版
+ * @version 2.1 - 差分取得チェックポイント管理対応
  * @see getSpreadsheetConfig - スクリプトプロパティから設定を取得
  * @see getStoredTokens - 認証トークンを取得
+ * @see getLastStockSyncTime - 在庫マスタ前回同期日時の取得
+ * @see saveLastStockSyncTime - 在庫マスタ同期日時の保存
  */
 
 // API関連定数
@@ -113,6 +116,64 @@ function getStoredTokens() {
         accessToken,
         refreshToken
     };
+}
+
+// ============================================================================
+// 在庫マスタ差分同期チェックポイント設定
+// スクリプトプロパティ:
+//   STOCK_LAST_SYNC_DATETIME : 在庫マスタ差分取得の前回同期日時（YYYY-MM-dd HH:mm:ss）
+// ============================================================================
+const STOCK_LAST_SYNC_PROP_KEY = 'STOCK_LAST_SYNC_DATETIME';
+const DEFAULT_SYNC_LOOKBACK_HOURS = 2; // 初回未設定時のデフォルト遡り時間（2時間）
+
+/**
+ * 在庫マスタの前回同期日時を取得する
+ *
+ * スクリプトプロパティ STOCK_LAST_SYNC_DATETIME から取得。
+ * 未設定（初回実行時など）の場合は、現在時刻から指定時間前（既定2時間前）の
+ * 日時文字列（YYYY-MM-dd HH:mm:ss）を安全なフォールバックとして生成して返却する。
+ *
+ * @param {number} [fallbackHours=DEFAULT_SYNC_LOOKBACK_HOURS] - 未設定時に遡る時間数
+ * @return {string} 同期基準日時文字列（YYYY-MM-dd HH:mm:ss）
+ */
+function getLastStockSyncTime(fallbackHours = DEFAULT_SYNC_LOOKBACK_HOURS) {
+    const properties = PropertiesService.getScriptProperties();
+    const lastSyncTime = properties.getProperty(STOCK_LAST_SYNC_PROP_KEY);
+
+    if (lastSyncTime && lastSyncTime.trim()) {
+        return lastSyncTime.trim();
+    }
+
+    // 未設定時はフォールバック日時（現在より指定時間前）を生成
+    const now = new Date();
+    const fallbackDate = new Date(now.getTime() - fallbackHours * 60 * 60 * 1000);
+    const formattedFallback = Utilities.formatDate(fallbackDate, 'Asia/Tokyo', 'yyyy-MM-dd HH:mm:ss');
+
+    return formattedFallback;
+}
+
+/**
+ * 在庫マスタの同期日時（チェックポイント）を保存する
+ *
+ * @param {Date|string} dateTimeOrDate - 保存する日時（Dateオブジェクトまたは YYYY-MM-dd HH:mm:ss 文字列）
+ * @return {string} 保存された日時文字列
+ */
+function saveLastStockSyncTime(dateTimeOrDate) {
+    if (!dateTimeOrDate) {
+        throw new Error('saveLastStockSyncTime: 日時が指定されていません');
+    }
+
+    let dateTimeStr = '';
+    if (dateTimeOrDate instanceof Date) {
+        dateTimeStr = Utilities.formatDate(dateTimeOrDate, 'Asia/Tokyo', 'yyyy-MM-dd HH:mm:ss');
+    } else if (typeof dateTimeOrDate === 'string') {
+        dateTimeStr = dateTimeOrDate.trim();
+    } else {
+        throw new Error('saveLastStockSyncTime: 日時の形式が不正です（Dateまたは文字列を指定してください）');
+    }
+
+    PropertiesService.getScriptProperties().setProperty(STOCK_LAST_SYNC_PROP_KEY, dateTimeStr);
+    return dateTimeStr;
 }
 
 // ============================================================================
