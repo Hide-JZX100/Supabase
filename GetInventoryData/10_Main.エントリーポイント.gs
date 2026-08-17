@@ -461,10 +461,10 @@ function updateInventoryDataIncremental() {
         const rawStockMap = fetchModifiedStockData(lastSyncTime, tokens);
         logWithLevel(LOG_LEVEL.MINIMAL, `差分取得件数: ${rawStockMap.size}件`);
 
-        // Step 6: 差分生データの整形
+        // Step 5: 差分生データの整形
         const inventoryDataMap = buildModifiedInventoryDataMap(rawStockMap);
 
-        // Step 7: スプレッドシート読み込み & 行番号マップ（有効商品コード一覧）構築
+        // Step 6: スプレッドシート読み込み & 行番号マップ（有効商品コード一覧）構築
         const { SPREADSHEET_ID, SHEET_NAME } = getSpreadsheetConfig();
         const spreadsheet = SpreadsheetApp.openById(SPREADSHEET_ID);
         const sheet = spreadsheet.getSheetByName(SHEET_NAME);
@@ -491,22 +491,42 @@ function updateInventoryDataIncremental() {
             }
         }
 
-        // Step 8: スプレッドシート既存商品コードによるフィルタリング
+        // 商品コードの表記ゆれ（大文字小文字・前後空白）対策の正規化マップ
+        // key: 小文字・trim済みコード, value: シート上の元の表記
+        // NE APIが差分取得時に表記ゆれのあるコードを返した場合、完全一致では
+        // 有効商品が誤って除外されてしまうため、フォールバックとして参照する
+        const normalizedCodeMap = new Map();
+        for (const originalCode of rowIndexMap.keys()) {
+            normalizedCodeMap.set(originalCode.toLowerCase(), originalCode);
+        }
+
+        // Step 7: スプレッドシート既存商品コードによるフィルタリング
         // 在庫マスタAPIは全更新商品を返すため、スプレッドシートに存在する有効商品のみを抽出する（xxxxxx等を除外）
+        // 完全一致しない場合は正規化マップでフォールバック照合し、表記ゆれによる誤除外を防ぐ
         const validInventoryDataMap = new Map();
         let skippedCount = 0;
+        let normalizedMatchCount = 0;
 
         for (const [code, data] of inventoryDataMap) {
             if (rowIndexMap.has(code)) {
                 validInventoryDataMap.set(code, data);
             } else {
-                skippedCount++;
+                const normalized = code.toString().trim().toLowerCase();
+                const originalCode = normalizedCodeMap.get(normalized);
+
+                if (originalCode) {
+                    // 表記ゆれを吸収し、シート上の元の表記で登録（後続の行更新・Supabase送信を正しく行うため）
+                    validInventoryDataMap.set(originalCode, data);
+                    normalizedMatchCount++;
+                } else {
+                    skippedCount++;
+                }
             }
         }
 
-        logWithLevel(LOG_LEVEL.MINIMAL, `差分データ検証: 有効対象 ${validInventoryDataMap.size}件 / 対象外（除外商品）スキップ ${skippedCount}件`);
+        logWithLevel(LOG_LEVEL.MINIMAL, `差分データ検証: 有効対象 ${validInventoryDataMap.size}件（表記ゆれ復元 ${normalizedMatchCount}件含む） / 対象外（除外商品）スキップ ${skippedCount}件`);
 
-        // Step 9: 有効差分件数の判定（0件の場合は早期終了）
+        // Step 8: 有効差分件数の判定（0件の場合は早期終了）
         if (validInventoryDataMap.size === 0) {
             logWithLevel(LOG_LEVEL.MINIMAL, '有効な更新対象在庫データはありませんでした。');
 
@@ -524,22 +544,22 @@ function updateInventoryDataIncremental() {
             return;
         }
 
-        // Step 10: スプレッドシート差分行一括更新（有効商品のみ）
+        // Step 9: スプレッドシート差分行一括更新（有効商品のみ）
         logWithLevel(LOG_LEVEL.MINIMAL, 'スプレッドシート差分更新中...');
         const sheetUpdateResult = updateIncrementalInventoryData(sheet, validInventoryDataMap, rowIndexMap);
 
-        // Step 11: Supabaseへの差分データ送信（有効商品のみ）
+        // Step 10: Supabaseへの差分データ送信（有効商品のみ）
         logWithLevel(LOG_LEVEL.MINIMAL, 'Supabaseへの差分書き込み中...');
         const supabaseResult = upsertStockToSupabase(validInventoryDataMap);
 
-        // Step 12: チェックポイント更新（取得開始前時刻を保存）
+        // Step 11: チェックポイント更新（取得開始前時刻を保存）
         saveLastStockSyncTime(syncStartTime);
         logWithLevel(LOG_LEVEL.SUMMARY, `チェックポイント更新完了: ${Utilities.formatDate(syncStartTime, 'Asia/Tokyo', 'yyyy-MM-dd HH:mm:ss')}`);
 
-        // Step 13: 実行タイムスタンプ記録
+        // Step 12: 実行タイムスタンプ記録
         recordExecutionTimestamp();
 
-        // Step 14: 配布側連携
+        // Step 13: 配布側連携
         callDistributeInventory();
 
         // リトライ統計の表示と記録
