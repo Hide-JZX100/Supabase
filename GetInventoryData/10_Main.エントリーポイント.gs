@@ -19,35 +19,29 @@
  * Step 4. データ整形                   (14_InventoryLogic.gs)
  * Step 5. シート全件書き直し           (15_SpreadsheetRepository.gs)
  * Step 5b. Supabaseへの全件書き込み    (17_SupabaseRepository.gs)
- * Step 6. 実行タイムスタンプ記録       (15_SpreadsheetRepository.gs)
- * Step 6b. 動的トリガーでDistributeInventoryを呼び出す (18_TriggerManager.gs / 19_DistributeCaller.gs)
+ * Step 6. チェックポイント更新         (11_Config.gs: saveLastStockSyncTime)
+ * Step 6b. 実行タイムスタンプ記録      (15_SpreadsheetRepository.gs)
+ * Step 6c. 動的トリガーでDistributeInventoryを呼び出す (18_TriggerManager.gs / 19_DistributeCaller.gs)
  *
- * ### 処理フロー (updateInventoryDataBatchWithRetry)
- * 1. リトライ統計リセット (12_Logger.gs)
- * 2. スプレッドシート・シート取得 (11_Config.gs)
- * 3. 商品コードリスト構築 (本ファイル内ループ)
- * 4. バッチ分割ループ (在庫取得・更新・エラー収集)
- * 5. エラーログをシートに記録 (15_SpreadsheetRepository.gs)
- * 6. リトライ統計を表示・記録 (12_Logger.gs / 15_SpreadsheetRepository.gs)
- * 7. 実行タイムスタンプを記録 (15_SpreadsheetRepository.gs)
- * 8. 動的トリガーでDistributeInventoryを呼び出す (18_TriggerManager.gs / 19_DistributeCaller.gs)
+ * ### 処理フロー (updateInventoryDataIncremental - 差分取得版)
+ * Step 1. リトライ統計リセット        (12_Logger.gs)
+ * Step 2. 前回同期日時の取得          (11_Config.gs)
+ * Step 3. 差分在庫API取得             (13_NextEngineAPI.gs)
+ * Step 4. 差分データ整形             (14_InventoryLogic.gs)
+ * Step 5. シート差分行一括更新        (15_SpreadsheetRepository.gs)
+ * Step 6. Supabase差分書き込み        (17_SupabaseRepository.gs)
+ * Step 7. チェックポイント更新        (11_Config.gs)
+ * Step 8. 実行タイムスタンプ記録・配布連携 (15_SpreadsheetRepository.gs / 19_DistributeCaller.gs)
  *
  * ### トリガー設定
- * - トリガー設定スクリプト.gsの setTrigger() で時間ベーストリガーを管理
- * - プロパティ `TRIGGER_FUNCTION_NAME` に関数名を設定
- * - GASの6分制限に注意し、必要に応じて `MAX_ITEMS_PER_CALL` を調整
+ * - 日中更新用: updateInventoryDataIncremental
+ * - 深夜全件用: updateInventoryDataFromGoodsMaster
  *
- * 【スクリプトプロパティ（要設定）】
- *   SPREADSHEET_ID   : 対象スプレッドシートのID
- *   SHEET_NAME       : 在庫データシート名
- *   LOG_SHEET_NAME   : 実行タイムスタンプ記録先シート名
- *   ACCESS_TOKEN     : NE APIアクセストークン（認証.gsで取得）
- *   REFRESH_TOKEN    : NE APIリフレッシュトークン（認証.gsで取得）
- *
- * @see updateInventoryDataBatchWithRetry - 【メイン】トリガーに設定する関数
+ * @version 3.1 (差分更新 updateInventoryDataIncremental 追加)
+ * @see updateInventoryDataIncremental    - 【日中用】在庫マスタ差分更新関数
+ * @see updateInventoryDataFromGoodsMaster- 【深夜用】商品マスタ全件同期関数
+ * @see updateInventoryDataBatchWithRetry - 【旧版】在庫マスタ全件バッチ更新関数
  * @see showUsageGuide                   - 使い方ガイドをコンソールに表示
- *
- * @version 3.0 (Supabase対応)
  */
 /**
  * メイン処理関数の修正版（リトライ統計対応）
@@ -391,10 +385,14 @@ function updateInventoryDataFromGoodsMaster() {
         const deactivateResult = callSupabaseRpc('deactivate_missing_goods', { active_codes: activeCodes });
         logWithLevel(LOG_LEVEL.MINIMAL, `非アクティブ化完了: ${deactivateResult.body}件`);
 
-        // Step 6: 実行タイムスタンプ記録
+        // Step 6: チェックポイント更新（全件同期完了時刻を次回差分同期のチェックポイントとして保存）
+        saveLastStockSyncTime(startTime);
+        logWithLevel(LOG_LEVEL.MINIMAL, `チェックポイント更新完了: ${Utilities.formatDate(startTime, 'Asia/Tokyo', 'yyyy-MM-dd HH:mm:ss')}`);
+
+        // Step 6b: 実行タイムスタンプ記録
         recordExecutionTimestamp();
 
-        // Step 6b: DistributeInventoryの配布処理を直接呼び出す（Phase B: トリガー待機を廃止）
+        // Step 6c: DistributeInventoryの配布処理を直接呼び出す（Phase B: トリガー待機を廃止）
         callDistributeInventory();
 
         // Step 7: 翌日分のトリガーを自動登録（自己スケジューリング）
@@ -413,6 +411,131 @@ function updateInventoryDataFromGoodsMaster() {
 
     } catch (error) {
         logError('全件更新エラー:', error.message);
+        throw error;
+    }
+}
+
+/**
+ * 在庫情報差分更新メイン処理（日中定期実行用）
+ *
+ * 前回の同期日時（STOCK_LAST_SYNC_DATETIME）以降に更新された在庫データのみを取得し、
+ * スプレッドシートの該当行およびSupabaseを効率的に更新します。
+ *
+ * 【処理フロー】
+ * Step 1. リトライ統計リセット (12_Logger.gs)
+ * Step 2. 実行開始日時と前回チェックポイントの取得 (11_Config.gs)
+ * Step 3. 認証トークン取得 (11_Config.gs)
+ * Step 4. 在庫マスタ差分API呼び出し (13_NextEngineAPI.gs: fetchModifiedStockData)
+ * Step 5. 差分データ整形 (14_InventoryLogic.gs: buildModifiedInventoryDataMap)
+ * Step 6. 差分件数判定:
+ *         - 0件の場合: ログ出力、チェックポイント更新、タイムスタンプ記録を行って早期正常終了
+ * Step 7. スプレッドシート読み込み & 行番号マップ（rowIndexMap）構築
+ * Step 8. スプレッドシート差分行一括更新 (15_SpreadsheetRepository.gs: updateIncrementalInventoryData)
+ * Step 9. Supabaseへの差分在庫データ送信 (17_SupabaseRepository.gs: upsertStockToSupabase)
+ * Step 10. チェックポイント更新 (11_Config.gs: saveLastStockSyncTime)
+ * Step 11. 実行タイムスタンプ記録 (15_SpreadsheetRepository.gs)
+ * Step 12. DistributeInventoryの配布処理を直接呼び出す (19_DistributeCaller.gs)
+ *
+ * @version 1.0 (Phase 4: 差分更新新設)
+ */
+function updateInventoryDataIncremental() {
+    try {
+        // Step 1: リトライ統計リセット
+        resetRetryStats();
+
+        logWithLevel(LOG_LEVEL.MINIMAL, '=== 在庫情報差分更新開始（インクリメンタルシンク） ===');
+        const syncStartTime = new Date();
+
+        // Step 2: 前回チェックポイント日時の取得
+        const lastSyncTime = getLastStockSyncTime();
+        logWithLevel(LOG_LEVEL.MINIMAL, `前回同期基準日時: ${lastSyncTime}`);
+
+        // Step 3: トークン取得
+        const tokens = getStoredTokens();
+
+        // Step 4: 在庫マスタAPIから差分取得（ページネーション・リトライ対応）
+        const rawStockMap = fetchModifiedStockData(lastSyncTime, tokens);
+        logWithLevel(LOG_LEVEL.MINIMAL, `差分取得件数: ${rawStockMap.size}件`);
+
+        // Step 5: 差分データ整形
+        const inventoryDataMap = buildModifiedInventoryDataMap(rawStockMap);
+
+        // Step 6: 差分件数の判定（0件の場合は早期終了）
+        if (inventoryDataMap.size === 0) {
+            logWithLevel(LOG_LEVEL.MINIMAL, '更新された在庫データはありませんでした。');
+
+            // チェックポイントを開始時刻で更新
+            saveLastStockSyncTime(syncStartTime);
+            logWithLevel(LOG_LEVEL.SUMMARY, `チェックポイント更新完了: ${Utilities.formatDate(syncStartTime, 'Asia/Tokyo', 'yyyy-MM-dd HH:mm:ss')}`);
+
+            recordExecutionTimestamp();
+
+            // 配布側連携
+            callDistributeInventory();
+
+            const duration = ((new Date() - syncStartTime) / 1000).toFixed(1);
+            logWithLevel(LOG_LEVEL.MINIMAL, `\n=== 差分更新完了（0件） === (処理時間: ${duration}秒)`);
+            return;
+        }
+
+        // Step 7: スプレッドシート読み込み & 行番号マップ構築
+        const { SPREADSHEET_ID, SHEET_NAME } = getSpreadsheetConfig();
+        const spreadsheet = SpreadsheetApp.openById(SPREADSHEET_ID);
+        const sheet = spreadsheet.getSheetByName(SHEET_NAME);
+
+        if (!sheet) {
+            throw new Error(`シート "${SHEET_NAME}" が見つかりません`);
+        }
+
+        const lastRow = sheet.getLastRow();
+        if (lastRow <= 1) {
+            logWithLevel(LOG_LEVEL.MINIMAL, 'スプレッドシートにデータ行が存在しません');
+            return;
+        }
+
+        // A列の商品コード一覧を取得して行番号マップを作成
+        const codeRange = sheet.getRange(2, COLUMNS.GOODS_CODE + 1, lastRow - 1, 1);
+        const codeValues = codeRange.getValues();
+        const rowIndexMap = new Map();
+
+        for (let i = 0; i < codeValues.length; i++) {
+            const code = codeValues[i][0];
+            if (code && code.toString().trim()) {
+                rowIndexMap.set(code.toString().trim(), i + 2);
+            }
+        }
+
+        // Step 8: スプレッドシート差分行一括更新
+        logWithLevel(LOG_LEVEL.MINIMAL, 'スプレッドシート差分更新中...');
+        const sheetUpdateResult = updateIncrementalInventoryData(sheet, inventoryDataMap, rowIndexMap);
+
+        // Step 9: Supabaseへの差分データ送信
+        logWithLevel(LOG_LEVEL.MINIMAL, 'Supabaseへの差分書き込み中...');
+        const supabaseResult = upsertStockToSupabase(inventoryDataMap);
+
+        // Step 10: チェックポイント更新（取得開始前時刻を保存）
+        saveLastStockSyncTime(syncStartTime);
+        logWithLevel(LOG_LEVEL.SUMMARY, `チェックポイント更新完了: ${Utilities.formatDate(syncStartTime, 'Asia/Tokyo', 'yyyy-MM-dd HH:mm:ss')}`);
+
+        // Step 11: 実行タイムスタンプ記録
+        recordExecutionTimestamp();
+
+        // Step 12: 配布側連携
+        callDistributeInventory();
+
+        // リトライ統計の表示と記録
+        showRetryStats();
+        logRetryStatsToSheet();
+
+        const duration = ((new Date() - syncStartTime) / 1000).toFixed(1);
+        logWithLevel(LOG_LEVEL.MINIMAL, '\n=== 差分更新完了 ===');
+        logWithLevel(LOG_LEVEL.MINIMAL, `処理時間    : ${duration}秒`);
+        logWithLevel(LOG_LEVEL.MINIMAL, `差分取得件数: ${inventoryDataMap.size}件`);
+        logWithLevel(LOG_LEVEL.MINIMAL, `シート更新  : 成功 ${sheetUpdateResult.updated}件 / エラー ${sheetUpdateResult.errorCount}件`);
+        logWithLevel(LOG_LEVEL.MINIMAL, `Supabase    : ${supabaseResult.records}件（${supabaseResult.chunks}チャンク, 成功: ${supabaseResult.success}）`);
+
+    } catch (error) {
+        logError('在庫情報差分更新エラー:', error.message);
         throw error;
     }
 }
