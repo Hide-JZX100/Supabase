@@ -491,33 +491,40 @@ function updateInventoryDataIncremental() {
             }
         }
 
+        // 商品コードの表記ゆれ（大文字小文字・前後空白）対策の正規化マップ
+        // key: 小文字・trim済みコード, value: シート上の元の表記
+        // NE APIが差分取得時に表記ゆれのあるコードを返した場合、完全一致では
+        // 有効商品が誤って除外されてしまうため、フォールバックとして参照する
+        const normalizedCodeMap = new Map();
+        for (const originalCode of rowIndexMap.keys()) {
+            normalizedCodeMap.set(originalCode.toLowerCase(), originalCode);
+        }
+
         // Step 8: スプレッドシート既存商品コードによるフィルタリング
         // 在庫マスタAPIは全更新商品を返すため、スプレッドシートに存在する有効商品のみを抽出する（xxxxxx等を除外）
+        // 完全一致しない場合は正規化マップでフォールバック照合し、表記ゆれによる誤除外を防ぐ
         const validInventoryDataMap = new Map();
         let skippedCount = 0;
-        const skippedCodes = []; // ★調査用: 原因切り分けのため一時追加
-
-        // ★調査用: 大文字小文字・前後空白を無視した正規化キー集合
-        const normalizedRowKeys = new Set();
-        for (const key of rowIndexMap.keys()) {
-            normalizedRowKeys.add(key.toLowerCase());
-        }
+        let normalizedMatchCount = 0;
 
         for (const [code, data] of inventoryDataMap) {
             if (rowIndexMap.has(code)) {
                 validInventoryDataMap.set(code, data);
             } else {
-                skippedCount++;
                 const normalized = code.toString().trim().toLowerCase();
-                const reason = normalizedRowKeys.has(normalized) ? '表記ゆれ疑い' : '除外商品/未登録';
-                skippedCodes.push(`${code}(${reason})`);
+                const originalCode = normalizedCodeMap.get(normalized);
+
+                if (originalCode) {
+                    // 表記ゆれを吸収し、シート上の元の表記で登録（後続の行更新・Supabase送信を正しく行うため）
+                    validInventoryDataMap.set(originalCode, data);
+                    normalizedMatchCount++;
+                } else {
+                    skippedCount++;
+                }
             }
         }
 
-        logWithLevel(LOG_LEVEL.MINIMAL, `差分データ検証: 有効対象 ${validInventoryDataMap.size}件 / 対象外（除外商品）スキップ ${skippedCount}件`);
-        if (skippedCodes.length > 0) {
-            logWithLevel(LOG_LEVEL.MINIMAL, `  ★調査用スキップ内訳: ${skippedCodes.join(', ')}`);
-        }
+        logWithLevel(LOG_LEVEL.MINIMAL, `差分データ検証: 有効対象 ${validInventoryDataMap.size}件（表記ゆれ復元 ${normalizedMatchCount}件含む） / 対象外（除外商品）スキップ ${skippedCount}件`);
 
         // Step 9: 有効差分件数の判定（0件の場合は早期終了）
         if (validInventoryDataMap.size === 0) {
