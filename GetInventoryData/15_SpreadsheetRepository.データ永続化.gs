@@ -21,8 +21,9 @@
  * 連続した行をグループ化して1回の `setValues()` で複数行を一括書き込みします。
  * これにより `SpreadsheetApp` への呼び出し回数を最小化し処理速度を向上させています。
  *
- * @version 2.1
+ * @version 2.2 - 差分行更新対応
  * @see updateBatchInventoryData
+ * @see updateIncrementalInventoryData - 【新規】差分在庫データによるスプレッドシート該当行一括更新
  * @see updateRowWithInventoryData
  * @see logErrorsToSheet
  * @see logRetryStatsToSheet
@@ -156,6 +157,49 @@ function updateBatchInventoryData(sheet, batch, inventoryDataMap, rowIndexMap) {
     return {
         updated: totalUpdated,
         results: results
+    };
+}
+
+/**
+ * 差分取得した在庫データでスプレッドシートの該当行を一括更新する
+ *
+ * 【処理フロー】
+ * 1. inventoryDataMap が空の場合は即座に { updated: 0, errorCount: 0, results: [] } を返却
+ * 2. inventoryDataMap のキー（商品コード）一覧を取り出す
+ * 3. 既存の updateBatchInventoryData() を活用し、連続行をグループ化して setValues で高速一括更新
+ * 4. シート上に存在しない商品コード（rowIndexMap にないもの）は no_data として記録
+ * 5. 更新結果オブジェクトを返却
+ *
+ * @param  {Sheet} sheet            - 対象シートオブジェクト
+ * @param  {Map}   inventoryDataMap - 差分在庫データマップ (key: 商品コード, value: InventoryDataオブジェクト)
+ * @param  {Map}   rowIndexMap      - 行番号マップ (key: 商品コード, value: 行番号)
+ * @return {Object}                 - { updated: number, errorCount: number, results: Array }
+ */
+function updateIncrementalInventoryData(sheet, inventoryDataMap, rowIndexMap) {
+    if (!inventoryDataMap || inventoryDataMap.size === 0) {
+        return { updated: 0, errorCount: 0, results: [] };
+    }
+
+    const modifiedGoodsCodes = Array.from(inventoryDataMap.keys());
+    logWithLevel(LOG_LEVEL.SUMMARY, `スプレッドシート差分更新開始: 対象 ${modifiedGoodsCodes.length}件`);
+
+    const updateResult = updateBatchInventoryData(
+        sheet,
+        modifiedGoodsCodes,
+        inventoryDataMap,
+        rowIndexMap
+    );
+
+    const errorCount = updateResult.results.filter(
+        r => r.status === 'error' || r.status === 'no_data'
+    ).length;
+
+    logWithLevel(LOG_LEVEL.SUMMARY, `スプレッドシート差分更新完了: 更新成功 ${updateResult.updated}件 / エラー・未該当 ${errorCount}件`);
+
+    return {
+        updated: updateResult.updated,
+        errorCount: errorCount,
+        results: updateResult.results
     };
 }
 
