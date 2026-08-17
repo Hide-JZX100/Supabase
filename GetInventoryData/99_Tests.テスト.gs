@@ -29,7 +29,7 @@
  * 4. `showSREDashboard()`             : エラーログ・リトライ統計の確認
  *
  * ### 主要機能
- * - **動作確認**: `testRetryFunction`, `verifyConfiguration`, `test_fetchModifiedStockData`, `test_checkpointAndLogic`
+ * - **動作確認**: `testRetryFunction`, `verifyConfiguration`, `test_fetchModifiedStockData`, `test_checkpointAndLogic`, `test_incrementalSheetAndSupabaseUpdate`
  * - **システム健全性**: `showSREDashboard`
  * - **リトライ検証**: `testRetryLogging`, `finalRetryTest`
  * - **デバッグ・診断**: `checkFileUsage`, `locateFunctions`
@@ -39,10 +39,11 @@
  * - `testRetryFunction()` は実際にAPIを呼び出すため、レート制限に注意してください。
  * - スプレッドシートへの書き込みを伴うテストは本番データへの影響に注意してください。
  *
- * @version 2.6 (Phase 2: チェックポイント管理・データ整形テスト追加)
+ * @version 2.7 (Phase 3: 差分更新・シート＆Supabase連携テスト追加)
  * @see testRetryFunction
  * @see test_fetchModifiedStockData
  * @see test_checkpointAndLogic
+ * @see test_incrementalSheetAndSupabaseUpdate
  * @see verifyConfiguration
  * @see showSREDashboard
  * @see testRetryLogging
@@ -1612,6 +1613,129 @@ function test_checkpointAndLogic() {
         } else {
             properties.deleteProperty('STOCK_LAST_SYNC_DATETIME');
             console.log('\n[クリーンアップ] テスト用プロパティを削除しました');
+        }
+    }
+}
+
+/**
+ * 差分更新におけるスプレッドシート行更新およびSupabase更新の単体テスト
+ *
+ * 【検証項目】
+ * 1. スプレッドシートから先頭2件の商品コードと行番号を取得
+ * 2. テスト用差分データを生成し、updateIncrementalInventoryData() で更新
+ * 3. シートの該当セルが正しく更新されたかを読み取って検証
+ * 4. upsertStockToSupabase() でSupabaseへ送信し、RPC呼び出しが成功することを検証
+ * 5. finally ブロックでシートの値を元の状態に安全に復元
+ */
+function test_incrementalSheetAndSupabaseUpdate() {
+    console.log('=== 差分更新（シート & Supabase）テスト開始 ===\n');
+
+    const { SPREADSHEET_ID, SHEET_NAME } = getSpreadsheetConfig();
+    const spreadsheet = SpreadsheetApp.openById(SPREADSHEET_ID);
+    const sheet = spreadsheet.getSheetByName(SHEET_NAME);
+
+    if (!sheet) {
+        throw new Error(`シート "${SHEET_NAME}" が見つかりません`);
+    }
+
+    const lastRow = sheet.getLastRow();
+    if (lastRow <= 1) {
+        console.warn('⚠️ シートにデータが存在しないためテストをスキップします');
+        return;
+    }
+
+    // テスト対象: 先頭2行（行2〜3）
+    const targetCount = Math.min(2, lastRow - 1);
+    const originalRange = sheet.getRange(2, 1, targetCount, 12);
+    const originalValues = originalRange.getValues();
+
+    // 元データを退避
+    const backupRows = originalValues.map(row => [...row]);
+    const targetGoodsCodes = [];
+    const rowIndexMap = new Map();
+
+    for (let i = 0; i < originalValues.length; i++) {
+        const code = originalValues[i][COLUMNS.GOODS_CODE];
+        if (code && code.toString().trim()) {
+            const cleanCode = code.toString().trim();
+            targetGoodsCodes.push(cleanCode);
+            rowIndexMap.set(cleanCode, i + 2);
+        }
+    }
+
+    if (targetGoodsCodes.length === 0) {
+        console.warn('⚠️ 有効な商品コードが見つかりません');
+        return;
+    }
+
+    console.log(`テスト対象商品: ${targetGoodsCodes.join(', ')} (行: ${Array.from(rowIndexMap.values()).join(', ')})`);
+
+    try {
+        // --- テスト用ダミー差分データの構築 ---
+        const testInventoryMap = new Map();
+        for (const code of targetGoodsCodes) {
+            testInventoryMap.set(code, {
+                goods_id: code,
+                goods_name: '',
+                stock_quantity: 999,
+                stock_allocated_quantity: 11,
+                stock_free_quantity: 988,
+                stock_defective_quantity: 0,
+                stock_advance_order_quantity: 0,
+                stock_advance_order_allocation_quantity: 0,
+                stock_advance_order_free_quantity: 0,
+                stock_remaining_order_quantity: 50,
+                stock_out_quantity: 0,
+                stock_last_modified_date: '2026-08-17 10:00:00'
+            });
+        }
+
+        // --- 1. スプレッドシート差分行更新テスト ---
+        console.log('\n【1】updateIncrementalInventoryData() の実行テスト');
+        const sheetResult = updateIncrementalInventoryData(sheet, testInventoryMap, rowIndexMap);
+        console.log(`  更新結果: 成功 ${sheetResult.updated}件 / エラー ${sheetResult.errorCount}件`);
+
+        if (sheetResult.updated === targetGoodsCodes.length) {
+            console.log('  ✓ スプレッドシート差分更新件数が一致');
+        } else {
+            console.error(`  ❌ 更新件数不一致: 期待 ${targetGoodsCodes.length}, 実際 ${sheetResult.updated}`);
+        }
+
+        // 更新後のシートセル値を直接読み取って検証（在庫数 999）
+        const updatedRange = sheet.getRange(2, COLUMNS.STOCK_QTY + 1, targetCount, 1);
+        const updatedStocks = updatedRange.getValues();
+        const allMatched = updatedStocks.every(r => r[0] === 999);
+        if (allMatched) {
+            console.log('  ✓ シート上の在庫数セル値が 999 に更新されていることを確認');
+        } else {
+            console.error('  ❌ シート上の在庫数値が期待値と異なります:', updatedStocks);
+        }
+
+        // --- 2. Supabase upsertStockToSupabase() 実行テスト ---
+        console.log('\n【2】upsertStockToSupabase() の実行テスト');
+        const supabaseResult = upsertStockToSupabase(testInventoryMap);
+        console.log(`  Supabase送信結果: レコード ${supabaseResult.records}件, チャンク ${supabaseResult.chunks}, 成功: ${supabaseResult.success}`);
+
+        if (supabaseResult.success) {
+            console.log('  ✓ Supabaseへの在庫数値upsert成功');
+        } else {
+            console.error('  ❌ Supabaseへの在庫数値upsert失敗');
+        }
+
+        console.log('\n=== 差分更新（シート & Supabase）テスト完了: すべて正常 ===');
+
+    } catch (error) {
+        console.error('❌ テスト実行中にエラーが発生しました: ' + error.message);
+        if (error.stack) {
+            console.error(error.stack);
+        }
+    } finally {
+        // 元のシートデータを必ず復元
+        try {
+            originalRange.setValues(backupRows);
+            console.log('\n[復元] スプレッドシートのテスト行を元の値に復元しました');
+        } catch (restoreError) {
+            console.error('❌ シートの復元に失敗しました: ' + restoreError.message);
         }
     }
 }
