@@ -20,7 +20,7 @@
  * @see saveLastExecutedAt        - 最終実行日時をプロパティに保存
  * @see loadLastExecutedAt        - 最終実行日時をプロパティから読み出す
  *
- * @version 1.3 (Phase 4: 差分取得機能追加)
+ * @version 1.4 (Phase 3: 在庫upsertチャンク分割対応)
  */
 
 // ============================================================================
@@ -202,47 +202,53 @@ function buildStockPayload(inventoryDataMap) {
 }
 
 /**
- * 在庫データを Supabase にバッチ単位で upsert する
+ * 在庫データを Supabase に upsert する（チャンク分割対応）
  *
- * buildStockPayload で変換された配列を、upsert_ne_stock_data RPC を用いて
- * Supabase に送信します。失敗時は例外を投げず、エラーログを記録して
- * バッチ処理ループ全体の継続性を確保します。
+ * buildStockPayload で変換された配列を SUPABASE_CHUNK_SIZE（1,000件）単位で
+ * チャンク分割し、upsert_ne_stock_data RPC を用いて Supabase に送信します。
+ * 差分件数が1,000件を超える場合でも安全に全件更新できます。
+ * 失敗時は例外を投げず、エラーログを記録して結果オブジェクトを返却します。
  *
- * 【処理フロー】
- * 1. inventoryDataMap が空の場合は即座に成功結果を返却
- * 2. buildStockPayload() を呼び出して送信ペイロードを構築
- * 3. callSupabaseRpc('upsert_ne_stock_data', { json_data: payload }) を実行
- *    - 処理時間をミリ秒単位で計測（SRE 観点での監視用）
- * 4. 成功時は { records, success: true }、失敗時は logError 記録後に { records, success: false } を返却
- *
- * @param {Map} inventoryDataMap - バッチ1回分の在庫データ Map（最大1,000件）
- * @return {Object} 処理結果オブジェクト { records: number, success: boolean }
+ * @param {Map} inventoryDataMap - 在庫データ Map (key: 商品コード, value: inventoryData)
+ * @return {Object} 処理結果オブジェクト { records: number, chunks: number, success: boolean }
  */
 function upsertStockToSupabase(inventoryDataMap) {
   if (!inventoryDataMap || inventoryDataMap.size === 0) {
-    return { records: 0, success: true };
+    return { records: 0, chunks: 0, success: true };
   }
 
-  const payload = buildStockPayload(inventoryDataMap);
+  const allRecords = buildStockPayload(inventoryDataMap);
+  const totalRecords = allRecords.length;
+  const chunkCount = Math.ceil(totalRecords / SUPABASE_CHUNK_SIZE);
   const startTime = new Date();
 
-  try {
-    callSupabaseRpc('upsert_ne_stock_data', { json_data: payload });
+  let successChunks = 0;
+  let errorChunks = 0;
 
-    const duration = new Date() - startTime;
-    logWithLevel(LOG_LEVEL.SUMMARY, '  Supabase在庫更新完了: ' + payload.length + '件 (' + duration + 'ms)');
+  for (let i = 0; i < totalRecords; i += SUPABASE_CHUNK_SIZE) {
+    const chunk = allRecords.slice(i, i + SUPABASE_CHUNK_SIZE);
+    const chunkNumber = Math.floor(i / SUPABASE_CHUNK_SIZE) + 1;
+    const chunkStartTime = new Date();
 
-    return {
-      records: payload.length,
-      success: true
-    };
-  } catch (error) {
-    logError('Supabase在庫更新エラー: ' + error.message);
-    return {
-      records: payload.length,
-      success: false
-    };
+    try {
+      callSupabaseRpc('upsert_ne_stock_data', { json_data: chunk });
+      const chunkDuration = new Date() - chunkStartTime;
+      logWithLevel(LOG_LEVEL.SUMMARY, `  Supabase在庫更新（チャンク ${chunkNumber}/${chunkCount}）: ${chunk.length}件 (${chunkDuration}ms)`);
+      successChunks++;
+    } catch (error) {
+      logError(`Supabase在庫更新エラー（チャンク ${chunkNumber}/${chunkCount}）: ${error.message}`);
+      errorChunks++;
+    }
   }
+
+  const totalDuration = new Date() - startTime;
+  logWithLevel(LOG_LEVEL.SUMMARY, `Supabase在庫更新完了: 合計 ${totalRecords}件 / ${chunkCount}チャンク (${totalDuration}ms)`);
+
+  return {
+    records: totalRecords,
+    chunks: chunkCount,
+    success: (errorChunks === 0)
+  };
 }
 
 /**
