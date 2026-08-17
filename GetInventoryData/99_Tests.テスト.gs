@@ -29,7 +29,7 @@
  * 4. `showSREDashboard()`             : エラーログ・リトライ統計の確認
  *
  * ### 主要機能
- * - **動作確認**: `testRetryFunction`, `verifyConfiguration`, `test_fetchModifiedStockData`, `test_checkpointAndLogic`, `test_incrementalSheetAndSupabaseUpdate`
+ * - **動作確認**: `testRetryFunction`, `verifyConfiguration`, `test_fetchModifiedStockData`, `test_checkpointAndLogic`, `test_incrementalSheetAndSupabaseUpdate`, `test_updateInventoryDataIncremental`
  * - **システム健全性**: `showSREDashboard`
  * - **リトライ検証**: `testRetryLogging`, `finalRetryTest`
  * - **デバッグ・診断**: `checkFileUsage`, `locateFunctions`
@@ -39,11 +39,12 @@
  * - `testRetryFunction()` は実際にAPIを呼び出すため、レート制限に注意してください。
  * - スプレッドシートへの書き込みを伴うテストは本番データへの影響に注意してください。
  *
- * @version 2.7 (Phase 3: 差分更新・シート＆Supabase連携テスト追加)
+ * @version 2.8 (Phase 4: 差分更新メイン処理統合テスト追加)
  * @see testRetryFunction
  * @see test_fetchModifiedStockData
  * @see test_checkpointAndLogic
  * @see test_incrementalSheetAndSupabaseUpdate
+ * @see test_updateInventoryDataIncremental
  * @see verifyConfiguration
  * @see showSREDashboard
  * @see testRetryLogging
@@ -1736,6 +1737,44 @@ function test_incrementalSheetAndSupabaseUpdate() {
             console.log('\n[復元] スプレッドシートのテスト行を元の値に復元しました');
         } catch (restoreError) {
             console.error('❌ シートの復元に失敗しました: ' + restoreError.message);
+        }
+    }
+}
+
+/**
+ * 在庫情報差分更新メイン処理（updateInventoryDataIncremental）の統合手動テスト
+ *
+ * 【検証項目】
+ * 1. 実行前の前回同期チェックポイント（STOCK_LAST_SYNC_DATETIME）の取得・表示
+ * 2. updateInventoryDataIncremental() の呼び出し（差分取得→整形→シート更新→Supabase送信→チェックポイント更新→配布連携）
+ * 3. 実行後のチェックポイントが更新されたことの確認
+ * 4. 全体処理が例外なく完了することの検証
+ */
+function test_updateInventoryDataIncremental() {
+    console.log('=== 在庫情報差分更新（updateInventoryDataIncremental）統合テスト開始 ===\n');
+
+    try {
+        const beforeSyncTime = getLastStockSyncTime();
+        console.log(`[開始前] 前回同期基準日時: ${beforeSyncTime}`);
+
+        console.log('\n--- updateInventoryDataIncremental() を実行します ---');
+        updateInventoryDataIncremental();
+
+        const afterSyncTime = getLastStockSyncTime();
+        console.log(`\n[完了後] 新しい同期基準日時: ${afterSyncTime}`);
+
+        if (beforeSyncTime !== afterSyncTime) {
+            console.log('✓ チェックポイントが正常に前進・更新されました。');
+        } else {
+            console.log('ℹ️ チェックポイントの日時は同一でした（同一秒内実行または設定値）。');
+        }
+
+        console.log('\n=== 在庫情報差分更新 統合テスト完了: 正常終了 ===');
+
+    } catch (error) {
+        console.error('❌ 差分更新統合テストでエラーが発生しました: ' + error.message);
+        if (error.stack) {
+            console.error(error.stack);
         }
     }
 }
