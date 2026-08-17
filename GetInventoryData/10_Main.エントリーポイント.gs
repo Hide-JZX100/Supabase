@@ -26,12 +26,16 @@
  * ### 処理フロー (updateInventoryDataIncremental - 差分取得版)
  * Step 1. リトライ統計リセット        (12_Logger.gs)
  * Step 2. 前回同期日時の取得          (11_Config.gs)
- * Step 3. 差分在庫API取得             (13_NextEngineAPI.gs)
- * Step 4. 差分データ整形             (14_InventoryLogic.gs)
- * Step 5. シート差分行一括更新        (15_SpreadsheetRepository.gs)
- * Step 6. Supabase差分書き込み        (17_SupabaseRepository.gs)
- * Step 7. チェックポイント更新        (11_Config.gs)
- * Step 8. 実行タイムスタンプ記録・配布連携 (15_SpreadsheetRepository.gs / 19_DistributeCaller.gs)
+ * Step 3. 認証トークン取得            (11_Config.gs)
+ * Step 4. 差分在庫API取得             (13_NextEngineAPI.gs)
+ * Step 5. 差分データ整形             (14_InventoryLogic.gs)
+ * Step 6. スプレッドシート読み込み & 有効商品コード(rowIndexMap)取得 (11_Config.gs)
+ * Step 7. 有効商品コードでのフィルタリング（xxxxxx等の除外商品を排除）
+ * Step 8. 有効データ0件判定（0件時はチェックポイント更新・タイムスタンプ記録・配布連携して早期正常終了）
+ * Step 9. シート差分行一括更新（有効商品のみ） (15_SpreadsheetRepository.gs)
+ * Step 10. Supabase差分書き込み（有効商品のみ） (17_SupabaseRepository.gs)
+ * Step 11. チェックポイント更新       (11_Config.gs)
+ * Step 12. 実行タイムスタンプ記録・配布連携 (15_SpreadsheetRepository.gs / 19_DistributeCaller.gs)
  *
  * ### トリガー設定
  * - 日中更新用: updateInventoryDataIncremental
@@ -457,28 +461,10 @@ function updateInventoryDataIncremental() {
         const rawStockMap = fetchModifiedStockData(lastSyncTime, tokens);
         logWithLevel(LOG_LEVEL.MINIMAL, `差分取得件数: ${rawStockMap.size}件`);
 
-        // Step 5: 差分データ整形
+        // Step 6: 差分生データの整形
         const inventoryDataMap = buildModifiedInventoryDataMap(rawStockMap);
 
-        // Step 6: 差分件数の判定（0件の場合は早期終了）
-        if (inventoryDataMap.size === 0) {
-            logWithLevel(LOG_LEVEL.MINIMAL, '更新された在庫データはありませんでした。');
-
-            // チェックポイントを開始時刻で更新
-            saveLastStockSyncTime(syncStartTime);
-            logWithLevel(LOG_LEVEL.SUMMARY, `チェックポイント更新完了: ${Utilities.formatDate(syncStartTime, 'Asia/Tokyo', 'yyyy-MM-dd HH:mm:ss')}`);
-
-            recordExecutionTimestamp();
-
-            // 配布側連携
-            callDistributeInventory();
-
-            const duration = ((new Date() - syncStartTime) / 1000).toFixed(1);
-            logWithLevel(LOG_LEVEL.MINIMAL, `\n=== 差分更新完了（0件） === (処理時間: ${duration}秒)`);
-            return;
-        }
-
-        // Step 7: スプレッドシート読み込み & 行番号マップ構築
+        // Step 7: スプレッドシート読み込み & 行番号マップ（有効商品コード一覧）構築
         const { SPREADSHEET_ID, SHEET_NAME } = getSpreadsheetConfig();
         const spreadsheet = SpreadsheetApp.openById(SPREADSHEET_ID);
         const sheet = spreadsheet.getSheetByName(SHEET_NAME);
@@ -493,7 +479,7 @@ function updateInventoryDataIncremental() {
             return;
         }
 
-        // A列の商品コード一覧を取得して行番号マップを作成
+        // A列の商品コード一覧を取得して行番号マップを作成（深夜同期で除外済みの有効商品リスト）
         const codeRange = sheet.getRange(2, COLUMNS.GOODS_CODE + 1, lastRow - 1, 1);
         const codeValues = codeRange.getValues();
         const rowIndexMap = new Map();
@@ -505,22 +491,55 @@ function updateInventoryDataIncremental() {
             }
         }
 
-        // Step 8: スプレッドシート差分行一括更新
+        // Step 8: スプレッドシート既存商品コードによるフィルタリング
+        // 在庫マスタAPIは全更新商品を返すため、スプレッドシートに存在する有効商品のみを抽出する（xxxxxx等を除外）
+        const validInventoryDataMap = new Map();
+        let skippedCount = 0;
+
+        for (const [code, data] of inventoryDataMap) {
+            if (rowIndexMap.has(code)) {
+                validInventoryDataMap.set(code, data);
+            } else {
+                skippedCount++;
+            }
+        }
+
+        logWithLevel(LOG_LEVEL.MINIMAL, `差分データ検証: 有効対象 ${validInventoryDataMap.size}件 / 対象外（除外商品）スキップ ${skippedCount}件`);
+
+        // Step 9: 有効差分件数の判定（0件の場合は早期終了）
+        if (validInventoryDataMap.size === 0) {
+            logWithLevel(LOG_LEVEL.MINIMAL, '有効な更新対象在庫データはありませんでした。');
+
+            // チェックポイントを開始時刻で更新
+            saveLastStockSyncTime(syncStartTime);
+            logWithLevel(LOG_LEVEL.SUMMARY, `チェックポイント更新完了: ${Utilities.formatDate(syncStartTime, 'Asia/Tokyo', 'yyyy-MM-dd HH:mm:ss')}`);
+
+            recordExecutionTimestamp();
+
+            // 配布側連携
+            callDistributeInventory();
+
+            const duration = ((new Date() - syncStartTime) / 1000).toFixed(1);
+            logWithLevel(LOG_LEVEL.MINIMAL, `\n=== 差分更新完了（対象内0件） === (処理時間: ${duration}秒)`);
+            return;
+        }
+
+        // Step 10: スプレッドシート差分行一括更新（有効商品のみ）
         logWithLevel(LOG_LEVEL.MINIMAL, 'スプレッドシート差分更新中...');
-        const sheetUpdateResult = updateIncrementalInventoryData(sheet, inventoryDataMap, rowIndexMap);
+        const sheetUpdateResult = updateIncrementalInventoryData(sheet, validInventoryDataMap, rowIndexMap);
 
-        // Step 9: Supabaseへの差分データ送信
+        // Step 11: Supabaseへの差分データ送信（有効商品のみ）
         logWithLevel(LOG_LEVEL.MINIMAL, 'Supabaseへの差分書き込み中...');
-        const supabaseResult = upsertStockToSupabase(inventoryDataMap);
+        const supabaseResult = upsertStockToSupabase(validInventoryDataMap);
 
-        // Step 10: チェックポイント更新（取得開始前時刻を保存）
+        // Step 12: チェックポイント更新（取得開始前時刻を保存）
         saveLastStockSyncTime(syncStartTime);
         logWithLevel(LOG_LEVEL.SUMMARY, `チェックポイント更新完了: ${Utilities.formatDate(syncStartTime, 'Asia/Tokyo', 'yyyy-MM-dd HH:mm:ss')}`);
 
-        // Step 11: 実行タイムスタンプ記録
+        // Step 13: 実行タイムスタンプ記録
         recordExecutionTimestamp();
 
-        // Step 12: 配布側連携
+        // Step 14: 配布側連携
         callDistributeInventory();
 
         // リトライ統計の表示と記録
@@ -530,7 +549,7 @@ function updateInventoryDataIncremental() {
         const duration = ((new Date() - syncStartTime) / 1000).toFixed(1);
         logWithLevel(LOG_LEVEL.MINIMAL, '\n=== 差分更新完了 ===');
         logWithLevel(LOG_LEVEL.MINIMAL, `処理時間    : ${duration}秒`);
-        logWithLevel(LOG_LEVEL.MINIMAL, `差分取得件数: ${inventoryDataMap.size}件`);
+        logWithLevel(LOG_LEVEL.MINIMAL, `API取得件数 : ${rawStockMap.size}件 (有効: ${validInventoryDataMap.size}件, スキップ: ${skippedCount}件)`);
         logWithLevel(LOG_LEVEL.MINIMAL, `シート更新  : 成功 ${sheetUpdateResult.updated}件 / エラー ${sheetUpdateResult.errorCount}件`);
         logWithLevel(LOG_LEVEL.MINIMAL, `Supabase    : ${supabaseResult.records}件（${supabaseResult.chunks}チャンク, 成功: ${supabaseResult.success}）`);
 
