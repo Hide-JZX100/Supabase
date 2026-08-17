@@ -45,36 +45,35 @@ graph TD
     Main -->|8. 配布側連携| Caller[19_DistributeCaller.配布呼び出し.gs<br>callDistributeInventory]
 ```
 
-### B. 在庫情報リアルタイム更新フロー (updateInventoryDataBatchWithRetry)
-日中に1日6回実行され、スプレッドシートの既存商品コードリストをベースに、在庫マスタから現在の在庫数値をバッチ（1000件単位）で取得し、差分のみをスプレッドシートおよび Supabase に上書き更新します。
+### B. 在庫情報リアルタイム差分更新フロー (updateInventoryDataIncremental)
+日中に1日6回実行され、前回の同期日時（`STOCK_LAST_SYNC_DATETIME`）以降に更新された在庫データのみをAPIから高速に差分取得し、スプレッドシートの有効商品（`xxxxxx`等を除外した商品）のみを判定・抽出してスプレッドシートおよび Supabase に上書き更新します。
 
 ```mermaid
 graph TD
-    Trigger[時間主導型トリガー<br>1日6回実行] -->|起動| Main[10_Main.エントリーポイント.gs<br>updateInventoryDataBatchWithRetry]
+    Trigger[時間主導型トリガー<br>1日6回実行] -->|起動| Main[10_Main.エントリーポイント.gs<br>updateInventoryDataIncremental]
     
-    %% スプレッドシート読み込み
-    Main -->|1. 商品コード取得| SS[在庫データシート]
+    %% チェックポイント・API差分取得
+    Main -->|1. 前回同期日時取得| Config[11_Config.設定管理.gs<br>getLastStockSyncTime]
+    Main -->|2. 差分API取得| API[13_NextEngineAPI.API通信.gs<br>fetchModifiedStockData]
+    API -->|HTTP POST stock_last_modified_date-gte| NE_Stock[ネクストエンジン API<br>/api_v1_master_stock/search]
     
-    %% APIバッチ取得（リトライ付き）
-    Main -->|2. 在庫データ取得| Logic[14_InventoryLogic.ビジネスロジック.gs<br>getBatchInventoryDataWithRetry]
-    Logic -->|取得要求| API[13_NextEngineAPI.API通信.gs<br>getBatchStockDataWithRetry]
-    API -->|HTTP POST| NE_Stock[ネクストエンジン API<br>/api_v1_master_stock/search]
+    %% データ整形・有効商品フィルタ
+    API -->|差分生データ| Main
+    Main -->|3. 生データ整形| Logic[14_InventoryLogic.ビジネスロジック.gs<br>buildModifiedInventoryDataMap]
+    Main -->|4. 有効商品突き合わせ| SS[在庫データシート<br>A列既存商品コード]
     
     %% スプレッドシート更新
-    Main -->|3. グループ化一括更新| SSRepo[15_SpreadsheetRepository.データ永続化.gs<br>updateBatchInventoryData]
+    Main -->|5. 差分行一括更新| SSRepo[15_SpreadsheetRepository.データ永続化.gs<br>updateIncrementalInventoryData]
     SSRepo -->|setValues| SS
     
     %% Supabase更新
-    Main -->|4. 在庫数値upsert| Repo[17_SupabaseRepository.Supabase永続化.gs<br>upsertStockToSupabase]
-    Repo -->|バッチ単位| Client[16_SupabaseClient.Supabase接続.gs<br>callSupabaseRpc]
+    Main -->|6. 差分在庫upsert| Repo[17_SupabaseRepository.Supabase永続化.gs<br>upsertStockToSupabase]
+    Repo -->|チャンク分割| Client[16_SupabaseClient.Supabase接続.gs<br>callSupabaseRpc]
     Client -->|HTTP POST| RPC[(Supabase RPC<br>upsert_ne_stock_data)]
     
-    %% ログ記録
-    Main -->|5. エラー/リトライログ| SSRepo2[15_SpreadsheetRepository.データ永続化.gs]
-    SSRepo2 -->|書込| LogSheets[(エラーログシート / リトライログシート)]
-    
-    %% 配布側連携
-    Main -->|6. 配布側連携| Caller[19_DistributeCaller.配布呼び出し.gs<br>callDistributeInventory]
+    %% チェックポイント更新・配布側連携
+    Main -->|7. 次回チェックポイント保存| Config2[11_Config.設定管理.gs<br>saveLastStockSyncTime]
+    Main -->|8. 配布側連携| Caller[19_DistributeCaller.配布呼び出し.gs<br>callDistributeInventory]
 ```
 
 ### C. 配布側 (DistributeInventory) への直接連携
@@ -124,29 +123,35 @@ Mermaidダイアグラムが正しく表示されない環境（ローカルプ�
    └── 9. 翌日トリガーの自動登録 (トリガー設定.gs: setTriggerForGoodsMaster)
         └── 翌日の 0:05 に実行するトリガーを自動登録（自己スケジューリング）
 
-■ 処理フローB. 在庫情報リアルタイム更新 (1日6回)
-1. 実行開始 (10_Main.gs: updateInventoryDataBatchWithRetry)
+■ 処理フローB. 在庫情報リアルタイム差分更新 (1日6回)
+1. 実行開始 (10_Main.gs: updateInventoryDataIncremental)
    │  ├── リトライ統計のリセット (12_Logger.gs)
+   │  └── 前回同期基準日時の取得 (11_Config.gs: getLastStockSyncTime)
    │
-   ├── 2. 更新対象商品コードの取得 (10_Main.gs)
-   │    └── 在庫データシート of A列2行目以降から有効なコードを取得し、行番号をMap化
+   ├── 2. 在庫マスタAPIから差分データ取得 (13_NextEngineAPI.gs: fetchModifiedStockData)
+   │    └── `stock_last_modified_date-gte` を指定し、前回同期以降に更新された全在庫を取得 (リトライ対応)
    │
-   ├── 3. 在庫データの一括取得・整形 (14_InventoryLogic.gs: getBatchInventoryDataWithRetry)
-   │    └── 在庫マスタAPI `getBatchStockDataWithRetry` を呼び出し (指数バックオフ最大3回リトライ)
+   ├── 3. 差分生データの整形 (14_InventoryLogic.gs: buildModifiedInventoryDataMap)
    │
-   ├── 4. スプレッドシート更新 (15_SpreadsheetRepository.gs: updateBatchInventoryData)
-   │    └── 連続した行をグループ化して setValues の回数を最小化して一括書き込み
+   ├── 4. スプレッドシート読み込み & 有効商品フィルタリング (10_Main.gs)
+   │    ├── シートA列の既存商品コード一覧（rowIndexMap）を取得
+   │    └── シート上に存在する商品のみを抽出（`xxxxxx`等の除外対象商品は安全にスキップ）
    │
-   ├── 5. Supabase更新 (17_SupabaseRepository.gs: upsertStockToSupabase)
-   │    └── 在庫数値のみ（商品名・JAN除く）を RPC `upsert_ne_stock_data` で更新
+   ├── 5. 差分件数判定 (10_Main.gs)
+   │    └── 有効差分が0件の場合はチェックポイント更新・タイムスタンプ記録・配布連携を行い早期終了
    │
-   ├── 6. エラーログおよびリトライ統計の記録 (15_SpreadsheetRepository.gs)
-   │    ├── 発生したエラーを「エラーログ」シートに追記 (logErrorsToSheet)
-   │    └── リトライ統計が0%でない場合のみ「リトライログ」シートに追記 (logRetryStatsToSheet)
+   ├── 6. スプレッドシート差分行一括更新 (15_SpreadsheetRepository.gs: updateIncrementalInventoryData)
+   │    └── 差分商品の行のみをグループ化して setValues で高速一括更新
    │
-   ├── 7. 実行タイムスタンプ記録 (15_SpreadsheetRepository.gs: recordExecutionTimestamp)
+   ├── 7. Supabase差分更新 (17_SupabaseRepository.gs: upsertStockToSupabase)
+   │    └── 有効差分データのみを 1,000件チャンクで RPC `upsert_ne_stock_data` へ送信
    │
-   └── 8. 配布側 (DistributeInventory) への直接連携 (19_DistributeCaller.gs: callDistributeInventory)
+   ├── 8. チェックポイント更新 (11_Config.gs: saveLastStockSyncTime)
+   │    └── 取得開始前時刻を `STOCK_LAST_SYNC_DATETIME` として保存
+   │
+   ├── 9. 実行タイムスタンプ記録 (15_SpreadsheetRepository.gs: recordExecutionTimestamp)
+   │
+   └── 10. 配布側 (DistributeInventory) への直接連携 (19_DistributeCaller.gs: callDistributeInventory)
         └── HTTP POST で配布側 Web App を直接呼び出し
 ```
 
@@ -160,13 +165,15 @@ Mermaidダイアグラムが正しく表示されない環境（ローカルプ�
 - ロケーション名に `xxxxxx` が含まれる商品はインポート対象から除外されます。
 - データのページネーション（1000件単位）に標準対応しています。
 - 同期から外れた（ネクストエンジン側で廃止された）商品を一括非アクティブ化します。
-- 実行完了後に翌日分のトリガーを自動登録します（自己スケジューリング方式）。
+- 実行完了時に次回差分同期のチェックポイント（`STOCK_LAST_SYNC_DATETIME`）を更新し、翌日分のトリガーを自動登録します（自己スケジューリング方式）。
 
-### 2. 在庫情報リアルタイム更新 (1日6回 / 時間指定)
-**実行関数：** `updateInventoryDataBatchWithRetry`
-- 在庫数・引当数・フリー在庫数・欠品数のいずれかに変化がある場合のみ `更新日時` を更新
-- 1,000件バッチ処理（約3,200件を約18秒で処理）
-- エクスポネンシャルバックオフによる自動リトライ（最大3回）
+### 2. 在庫情報リアルタイム差分更新 (1日6回 / 時間指定)
+**実行関数：** `updateInventoryDataIncremental`
+- `stock_last_modified_date-gte` を利用し、前回の同期以降に更新されたレコードのみを高速に差分取得（インクリメンタルシンク）。
+- スプレッドシートの既存商品コードリストと突き合わせ、`xxxxxx` 等の除外対象商品を自動スキップ。
+- スプレッドシートの該当行のみを一括更新し、Supabase へも差分レコードのみを upsert。
+- API呼び出し回数・GAS実行時間・DB負荷を劇的に削減。
+- エクスポネンシャルバックオフによる自動リトライ（最大3回）。
 
 ### 3. 差分取得機能
 **提供関数：** `getChangedInventorySince(since)`
@@ -176,7 +183,7 @@ Mermaidダイアグラムが正しく表示されない環境（ローカルプ�
 - 将来の外部連携・通知処理の基盤として利用可能
 
 ### 4. 配布側（DistributeInventory）への直接連携
-在庫情報一括更新（`updateInventoryDataBatchWithRetry`）および商品マスタ同期（`updateInventoryDataFromGoodsMaster`）の完了直後に、配布側プロジェクトの Web App（Webhook）を直接呼び出します。動的トリガーによる待機時間（実測1〜2分）が完全に排除され、より高速でリアルタイム性の高い在庫情報の配布を実現します。
+在庫情報差分更新（`updateInventoryDataIncremental`）および商品マスタ同期（`updateInventoryDataFromGoodsMaster`）の完了直後に、配布側プロジェクトの Web App（Webhook）を直接呼び出します。動的トリガーによる待機時間（実測1〜2分）が完全に排除され、より高速でリアルタイム性の高い在庫情報の配布を実現します。
 
 ---
 
@@ -435,13 +442,14 @@ GAS エディタの「プロジェクトの設定」 ＞ 「スクリプトプ�
 | **Supabase 接続** | `SUPABASE_URL` | **必須** | Supabase プロジェクトURL | `https://xxxxxx.supabase.co` |
 | | `SUPABASE_KEY` | **必須** | Supabase の anon key (Service Roleキーも可) | `eyJhbGciOi...` |
 | | `SUPABASE_LAST_EXECUTED_AT`| 自動管理| 最終差分取得日時（自動保存・手動設定不要） | `2026-07-05T06:00:00.000Z` |
-| **トリガー・デバッグ** | `TRIGGER_FUNCTION_NAME`| **必須** | 定期実行する関数名（通常は在庫更新関数） | `updateInventoryDataBatchWithRetry` |
+| **在庫差分同期** | `STOCK_LAST_SYNC_DATETIME` | 自動管理 | 在庫マスタ差分取得の前回同期日時（YYYY-MM-dd HH:mm:ss） | `2026-08-17 10:00:00` |
+| **トリガー・デバッグ** | `TRIGGER_FUNCTION_NAME`| **必須** | 定期実行する関数名（日中差分同期 推奨） | `updateInventoryDataIncremental` |
 | | `TRIGGER_MODE` | **必須** | スケジュール登録モード（`TODAY` または `TOMORROW`）| `TODAY` |
 | | `LOG_LEVEL` | 任意 | ログ出力の詳しさ（`1`: MINIMAL / `2`: SUMMARY / `3`: DETAILED） | `2` |
 | | `TEST_SPREADSHEET_ID` | 任意 | 統合テスト（IntegrationTest）で使用するテスト用SS of ID | `1A2B3C4D5E...` |
 | **配布側連携** | `RECEIVER_WEBAPP_URL` | 任意 | 配布側（DistributeInventory）のWeb App URL | `https://script.google.com/.../exec` |
 | | `API_SHARED_TOKEN` | 任意 | 配布側と共通で設定する認証用の共有トークン | `任意のセキュリティトークン` |
-| | `DISTRIBUTE_TRIGGER_DELAY_MS`| 任意| トリガー登録から発火までのディレイ（ミリ秒、デフォルト: 30000 = 30秒） | `30000` |
+| | `DISTRIBUTE_TRIGGER_DELAY_MS`| 任意| トリガー登録から発火までのディレイ（ミリ秒、デフォルト: 100） | `100` |
 
 ---
 
@@ -452,15 +460,15 @@ GAS エディタの「プロジェクトの設定」 ＞ 「スクリプトプ�
 
 | 実行時刻 | 実行関数 | 同期対象 | 目的 |
 |---|---|---|---|
-| **0:05** | `updateInventoryDataFromGoodsMaster` | 商品マスタ API (全件) | 商品マスタの全件同期 ＆ 廃止商品の一括非アクティブ化、翌日トリガー自動再登録 |
-| **7:55** | `updateInventoryDataBatchWithRetry` | 在庫マスタ API (差分) | 朝の在庫データ同期、終了後に配布側への動的通知 |
-| **9:55** | `updateInventoryDataBatchWithRetry` | 在庫マスタ API (差分) | 午前中の在庫データ同期、終了後に配布側への動的通知 |
-| **13:25** | `updateInventoryDataBatchWithRetry` | 在庫マスタ API (差分) | 午後の在庫データ同期、終了後に配布側への動的通知 |
-| **15:55** | `updateInventoryDataBatchWithRetry` | 在庫マスタ API (差分) | 夕方の在庫データ同期、終了後に配布側への動的通知 |
-| **18:55** | `updateInventoryDataBatchWithRetry` | 在庫マスタ API (差分) | 退勤前の在庫データ同期、終了後に配布側への動的通知 |
-| **20:55** | `updateInventoryDataBatchWithRetry` | 在庫マスタ API (差分) | 夜間の在庫データ同期、終了後に配布側への動的通知 |
+| **0:05** | `updateInventoryDataFromGoodsMaster` | 商品マスタ API (全件) | 商品マスタの全件同期 ＆ 廃止商品の一括非アクティブ化、チェックポイント更新、翌日トリガー自動再登録 |
+| **7:55** | `updateInventoryDataIncremental` | 在庫マスタ API (差分) | 朝の在庫データ差分同期、終了後に配布側への直接通知 |
+| **9:55** | `updateInventoryDataIncremental` | 在庫マスタ API (差分) | 午前中の在庫データ差分同期、終了後に配布側への直接通知 |
+| **13:25** | `updateInventoryDataIncremental` | 在庫マスタ API (差分) | 午後の在庫データ差分同期、終了後に配布側への直接通知 |
+| **15:55** | `updateInventoryDataIncremental` | 在庫マスタ API (差分) | 夕方の在庫データ差分同期、終了後に配布側への直接通知 |
+| **18:55** | `updateInventoryDataIncremental` | 在庫マスタ API (差分) | 退勤前の在庫データ差分同期、終了後に配布側への直接通知 |
+| **20:55** | `updateInventoryDataIncremental` | 在庫マスタ API (差分) | 夜間の在庫データ差分同期、終了後に配布側への直接通知 |
 
-*(※0:05 の商品マスタ同期完了時に、日中の在庫同期がスムーズに行えるよう、自己スケジューリングにより翌日の 0:05 トリガーが自動登録されます。)*
+*(※0:05 の商品マスタ同期完了時に、日中の在庫差分同期がスムーズに行えるようチェックポイントが更新され、自己スケジューリングにより翌日の 0:05 トリガーが自動登録されます。)*
 
 ---
 
